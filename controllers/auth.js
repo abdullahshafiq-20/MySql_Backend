@@ -8,16 +8,23 @@ import dotenv from 'dotenv';
 
 export const signup = async (req, res) => {
     const {user_name, email, password, imageURL} = req.body;
+    
     console.log(req.body);
-    try{
+    try {
+        // Check if the email domain is nu.edu.pk
+        if (!email.endsWith('@nu.edu.pk')) {
+            return res.status(400).json({message: 'Invalid email domain. Only nu.edu.pk emails are allowed.'});
+        }
+
         const [existingUser] = await pool.query('SELECT * FROM users WHERE email = ?', [email])
         .catch(err => {
-        console.error('Query execution error:', err); // Log any query execution errors
-        throw err; // Re-throw the error to be caught in the outer catch
+            console.error('Query execution error:', err);
+            throw err;
         });
-        if(existingUser.length > 0){
+        if (existingUser.length > 0) {
             return res.status(400).json({message: 'User already exists'});
         }
+
         const hashedPassword = await bcrypt.hash(password, 10);
         const userId = uuidv4();
         const [result] = await pool.query(
@@ -28,7 +35,7 @@ export const signup = async (req, res) => {
         const transporter = nodemailer.createTransport({
             host: 'smtp.gmail.com',
             port: 587,
-            secure: false, // Use TLS
+            secure: false,
             auth: {
                 user: process.env.EMAIL_USER,
                 pass: process.env.EMAIL_PASS
@@ -50,22 +57,18 @@ export const signup = async (req, res) => {
             console.log('Verification email sent successfully');
         } catch (emailError) {
             console.error('Email sending error:', emailError);
-            // Log more details about the error
             if (emailError.response) {
                 console.error('SMTP Response:', emailError.response);
             }
         }
 
-        // const token = jwt.sign({email: email}, process.env.JWT_SECRET, {expiresIn: '10m'});
         const token = jwt.sign({ email, id: result.insertId }, 'PRIVATEKEY');
         res.status(201).json({
             user_info: { id: result.insertId, user_name, email, imageURL },
             token,
             message: 'Successfully signed up!',
-          });
-    }
-
-    catch (err) {
+        });
+    } catch (err) {
         console.error('Signup error:', err);
         if (err.code === 'ER_NO_SUCH_TABLE') {
             return res.status(500).json({ message: 'Database table not found' });
