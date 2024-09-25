@@ -106,3 +106,42 @@ export const verifyOTP = async (req, res) => {
         res.status(500).json({ message: 'Something went wrong' });
     }
 };
+
+
+export const signin = async (req, res) => {
+    const { email, password } = req.body;
+  
+    try {
+      // Fetch user by email
+      const [existingUser] = await pool.query('SELECT * FROM users WHERE email = ?', [email]);
+  
+      if (existingUser.length === 0) {
+        return res.status(400).json({ message: 'User not found!' });
+      }
+      const verified = existingUser[0].is_verified;
+        if (!verified) {
+            return res.status(400).json({ message: 'User not verified!' });
+        }
+  
+      const user = existingUser[0];
+  
+      // Verify password
+      const isPasswordCorrect = await bcrypt.compare(password, user.password);
+      if (!isPasswordCorrect) {
+        return res.status(400).json({ message: 'Invalid credentials' });
+      }
+  
+      // Generate token
+      const token = jwt.sign({ email: user.email, id: user.id }, 'PRIVATEKEY');
+  
+      res.status(201).json({
+        user_info: user,
+        token,
+        message: 'Successfully signed in!',
+      });
+    } catch (error) {
+      console.log(error);
+      res.status(500).json({ message: 'Something went wrong' });
+    }
+  };
+  
