@@ -1,0 +1,23 @@
+
+CREATE DATABASE testing;
+USE testing;
+CREATE TABLE users (
+    id VARCHAR(36) PRIMARY KEY,
+    user_name VARCHAR(255) NOT NULL,
+    email VARCHAR(255) NOT NULL UNIQUE,
+    password VARCHAR(255) NOT NULL,
+    imageURL VARCHAR(255),
+    is_verified BOOLEAN DEFAULT FALSE,  -- New field to track verification status
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
+);
+
+
+CREATE TABLE otps (
+    id INT AUTO_INCREMENT PRIMARY KEY,
+    otp VARCHAR(6) NOT NULL,
+    user_id VARCHAR(36),
+    isUsed BOOLEAN DEFAULT FALSE,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
+);
