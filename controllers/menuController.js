@@ -1,5 +1,5 @@
 import pool from '../config/database.js';
-import { generateItemId } from '../utils/generateItemId.js';
+import { generateItemId } from '../utils/generateId.js';
 
 export const addMenuItem = async (req, res) => {
   const { name, description, price } = req.body;

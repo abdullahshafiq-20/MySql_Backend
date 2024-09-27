@@ -3,7 +3,8 @@ import jwt from 'jsonwebtoken';
 import { v4 as uuidv4 } from 'uuid';
 import nodemailer from 'nodemailer';
 import pool from '../config/database.js';
-import { generateShopId } from '../utils/generateShopId.js';
+import { generateShopId } from '../utils/generateId.js';
+import { getShopDetailsWithStats, getTopSellingItems, getRecentOrdersWithDetails } from '../utils/shopUtils.js';
 
 export const createShop = async (req, res) => {
     const { name, email, description, image_url, phone_number } = req.body;
@@ -71,3 +72,23 @@ export const getShopDetails = async (req, res) => {
       res.status(400).json({ error: 'Failed to update shop', message: error.message });
     }
   };
+
+  export const ShopDashboard = async (req, res) => {
+    try {
+      const shopId = req.params.shopId;
+      console.log(shopId);
+      const shopDetails = await getShopDetailsWithStats(shopId);
+      console.log(shopDetails);
+      const topItems = await getTopSellingItems(shopId, 1);
+      console.log(topItems);
+      const recentOrders = await getRecentOrdersWithDetails(shopId, 5);
+  
+      res.json({
+        shopDetails,
+        topSellingItems: topItems,
+        recentOrders
+      });
+    } catch (error) {
+      res.status(500).json({ error: 'Failed to fetch dashboard data', message: error.message });
+    }
+  }

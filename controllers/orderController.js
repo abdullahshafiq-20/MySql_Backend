@@ -1,9 +1,6 @@
 import pool from '../config/database.js';
-
-
-
-
-import { generateOrderId } from '../utils/generateOrderId.js'; 
+import  {generateOrderId}  from '../utils/generateId.js'; 
+import { checkShopOwnership, incrementAlertCount } from '../utils/orderUtils.js';
 
 export const createOrder = async (req, res) => {
     const { shop_id, items } = req.body;
@@ -140,7 +137,69 @@ export const createOrder = async (req, res) => {
 
 //update order status by the shop owner
 //single order status check
+export const updateOrderStatus = async (req, res) => {
+    const { orderId } = req.params;
+    const { status } = req.body;
+    const ownerId = req.user.id;
 
+    if (!['pending', 'accepted', 'delivered', 'discarded'].includes(status)) {
+        return res.status(400).json({ error: 'Invalid status' });
+    }
+
+    try {
+        const connection = await pool.getConnection();
+        await connection.beginTransaction();
+
+        try {
+            // Get the order and check if it exists
+            const [orderRows] = await connection.execute(
+                'SELECT * FROM orders WHERE order_id = ?',
+                [orderId]
+            );
+
+            if (orderRows.length === 0) {
+                await connection.rollback();
+                return res.status(404).json({ error: 'Order not found' });
+            }
+
+            const order = orderRows[0];
+
+            // Check if the user is the owner of the shop
+            const isOwner = await checkShopOwnership(ownerId, order.shop_id);
+            if (!isOwner) {
+                await connection.rollback();
+                return res.status(403).json({ error: 'You are not authorized to update this order' });
+            }
+
+            // Update the order status
+            await connection.execute(
+                'UPDATE orders SET status = ? WHERE order_id = ?',
+                [status, orderId]
+            );
+
+            // If the status is changed to "discarded", increment the user's alert count
+            if (status === 'discarded') {
+                await incrementAlertCount(order.user_id);
+            }
+
+            await connection.commit();
+
+            res.status(200).json({
+                message: 'Order status updated successfully',
+                orderId,
+                newStatus: status
+            });
+        } catch (error) {
+            await connection.rollback();
+            throw error;
+        } finally {
+            connection.release();
+        }
+    } catch (error) {
+        console.error('Update order status error:', error);
+        res.status(500).json({ error: 'Failed to update order status', message: error.message });
+    }
+};
 
 
 
@@ -178,19 +237,19 @@ export const createOrder = async (req, res) => {
     }
   };
 
-  export const updateOrderStatus = async (req, res) => {
-    const { status } = req.body;
-    try {
-      const [result] = await pool.execute(
-        'UPDATE orders SET status = ? WHERE order_id = ? AND shop_id = ?',
-        [status, req.params.orderId, req.params.shopId]
-      );
-      if (result.affectedRows === 0) {
-        return res.status(404).json({ error: 'Order not found' });
-      }
-      res.status(200).json({ id: req.params.orderId, shop_id: req.params.shopId, status });
-    } catch (error) {
-      res.status(400).json({ error: 'Failed to update order status', message: error.message });
-    }
-  };
+//   export const updateOrderStatus = async (req, res) => {
+//     const { status } = req.body;
+//     try {
+//       const [result] = await pool.execute(
+//         'UPDATE orders SET status = ? WHERE order_id = ? AND shop_id = ?',
+//         [status, req.params.orderId, req.params.shopId]
+//       );
+//       if (result.affectedRows === 0) {
+//         return res.status(404).json({ error: 'Order not found' });
+//       }
+//       res.status(200).json({ id: req.params.orderId, shop_id: req.params.shopId, status });
+//     } catch (error) {
+//       res.status(400).json({ error: 'Failed to update order status', message: error.message });
+//     }
+//   };
   
