@@ -38,15 +38,36 @@ CREATE TABLE testing.shops (
 );
 
 CREATE TABLE testing.menu_items (
-    id VARCHAR(36) PRIMARY KEY,
+    item_id VARCHAR(36) PRIMARY KEY,
     shop_id VARCHAR(36) NOT NULL,
     name VARCHAR(255) NOT NULL,
     description TEXT,
-    size VARCHAR(50),
     price DECIMAL(10, 2) NOT NULL,
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
     FOREIGN KEY (shop_id) REFERENCES shops(id)
+);
+
+CREATE TABLE testing.orders (
+    order_id VARCHAR(36) PRIMARY KEY,
+    user_id VARCHAR(36) NOT NULL,
+    shop_id VARCHAR(36) NOT NULL,
+    total_price DECIMAL(10, 2) NOT NULL,
+    status ENUM('pending', 'accepted', 'delivered', 'discarded') DEFAULT 'pending',
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+    FOREIGN KEY (user_id) REFERENCES users(id),
+    FOREIGN KEY (shop_id) REFERENCES shops(id)
+);
+
+CREATE TABLE testing.order_items (
+    id INT AUTO_INCREMENT PRIMARY KEY,
+    order_id VARCHAR(36) NOT NULL,
+    item_id VARCHAR(36) NOT NULL,
+    quantity INT NOT NULL,
+    price DECIMAL(10, 2) NOT NULL,
+    FOREIGN KEY (order_id) REFERENCES orders(order_id),
+    FOREIGN KEY (item_id) REFERENCES menu_items(item_id)
 );
 
 

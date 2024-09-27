@@ -212,9 +212,9 @@ export const signin = async (req, res) => {
   
       // Generate token
       const token = jwt.sign(
-        { email: user.email, id: user.id },
+        { email: user.email, id: user.id, role: user.role },
         process.env.JWT_SECRET,
-        { expiresIn: '1h' } // Token expires in 1 hour
+        { expiresIn: '1d' } // Token expires in 1 hour
       );
   
       res.status(201).json({

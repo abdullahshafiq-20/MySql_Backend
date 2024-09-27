@@ -1,0 +1,196 @@
+import pool from '../config/database.js';
+
+
+
+
+import { generateOrderId } from '../utils/generateOrderId.js'; 
+
+export const createOrder = async (req, res) => {
+    const { shop_id, items } = req.body;
+    const user_role = req.user.role;
+    const user_id = req.user.id;
+    const order_id = generateOrderId();
+
+    if (user_role !== 'student' && user_role !== 'teacher') {
+        return res.status(403).json({ error: 'Only students and teachers can place orders' });
+    }
+
+    try {
+        const connection = await pool.getConnection();
+        await connection.beginTransaction();
+
+        try {
+            // Calculate total price before creating the order
+            let total_price = 0;
+            for (const item of items) {
+                const [menuItemResult] = await connection.execute(
+                    'SELECT price FROM menu_items WHERE item_id = ? AND shop_id = ?',
+                    [item.item_id, shop_id]
+                );
+
+                if (menuItemResult.length === 0) {
+                    throw new Error(`Menu item ${item.item_id} not found or does not belong to the shop`);
+                }
+
+                total_price += menuItemResult[0].price * item.quantity;
+            }
+
+            // Create the order with the calculated total_price
+            await connection.execute(
+                'INSERT INTO orders (order_id, user_id, shop_id, status, total_price) VALUES (?, ?, ?, ?, ?)',
+                [order_id, user_id, shop_id, 'pending', total_price]
+            );
+
+            // Insert order items
+            for (const item of items) {
+                const [menuItemResult] = await connection.execute(
+                    'SELECT price FROM menu_items WHERE item_id = ? AND shop_id = ?',
+                    [item.item_id, shop_id]
+                );
+
+                const item_price = menuItemResult[0].price * item.quantity;
+
+                await connection.execute(
+                    'INSERT INTO order_items (order_id, item_id, quantity, price) VALUES (?, ?, ?, ?)',
+                    [order_id, item.item_id, item.quantity, item_price]
+                );
+            }
+
+            await connection.commit();
+
+            res.status(201).json({
+                message: 'Order created successfully',
+                order_id,
+                total_price,
+                user_role
+            });
+        } catch (error) {
+            await connection.rollback();
+            throw error;
+        } finally {
+            connection.release();
+        }
+    } catch (error) {
+        console.error('Order creation error:', error);
+        res.status(500).json({ error: 'Failed to create order', message: error.message });
+    }
+};
+
+
+
+  export const getOrderDetails = async (req, res) => {
+    const { orderId } = req.params;
+    const user_id = req.user.id;
+    const user_role = req.user.role;
+  
+    try {
+      // Get order details
+      const [orderRows] = await pool.execute(
+        'SELECT * FROM orders WHERE order_id = ? AND user_id = ?',
+        [orderId, user_id]
+      );
+  
+      if (orderRows.length === 0) {
+        return res.status(404).json({ error: 'Order not found' });
+      }
+  
+      // Get order items
+      const [itemRows] = await pool.execute(
+        `SELECT oi.*, mi.name as item_name 
+         FROM order_items oi
+         JOIN menu_items mi ON oi.item_id = mi.item_id
+         WHERE oi.order_id = ?`,
+        [orderId]
+      );
+  
+      res.status(200).json({
+        order: orderRows[0],
+        items: itemRows,
+        user_role
+      });
+    } catch (error) {
+      res.status(500).json({ error: 'Failed to get order details', message: error.message });
+    }
+  };
+  
+  export const listUserOrders = async (req, res) => {
+    const user_id = req.user.id;
+    
+    try {
+        const [orderRows] = await pool.execute(
+            'SELECT * FROM orders WHERE user_id = ?',
+            [user_id]
+        );
+
+        res.status(200).json({
+            orders: orderRows,
+            user_id: user_id
+        });
+    } catch (error) {
+        console.error('List user orders error:', error);
+        res.status(500).json({ 
+            error: 'Failed to list user orders', 
+            message: error.message,
+            stack: error.stack,
+            user_id: user_id
+        });
+    }
+};
+
+
+//update order status by the shop owner
+//single order status check
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+  export const getOrderStatus = async (req, res) => {
+    try {
+      const [rows] = await pool.execute(
+        'SELECT * FROM orders WHERE id = ? AND shop_id = ?',
+        [req.params.orderId, req.params.shopId]
+      );
+      if (rows.length === 0) {
+        return res.status(404).json({ error: 'Order not found' });
+      }
+      res.status(200).json(rows[0]);
+    } catch (error) {
+      res.status(500).json({ error: 'Failed to get order', message: error.message });
+    }
+  };
+
+  export const updateOrderStatus = async (req, res) => {
+    const { status } = req.body;
+    try {
+      const [result] = await pool.execute(
+        'UPDATE orders SET status = ? WHERE order_id = ? AND shop_id = ?',
+        [status, req.params.orderId, req.params.shopId]
+      );
+      if (result.affectedRows === 0) {
+        return res.status(404).json({ error: 'Order not found' });
+      }
+      res.status(200).json({ id: req.params.orderId, shop_id: req.params.shopId, status });
+    } catch (error) {
+      res.status(400).json({ error: 'Failed to update order status', message: error.message });
+    }
+  };
+  
