@@ -95,7 +95,6 @@ CREATE TABLE testing.order_items (
 
 
 
-
 -- Shops table
 CREATE TABLE shops (
     id VARCHAR(36) PRIMARY KEY,
