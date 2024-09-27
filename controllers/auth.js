@@ -62,9 +62,9 @@ export const signup = async (req, res) => {
             }
         }
 
-        const token = jwt.sign({ email, id: result.insertId }, 'PRIVATEKEY');
+        const token = jwt.sign({ email, id: userId }, 'PRIVATEKEY');
         res.status(201).json({
-            user_info: { id: result.insertId, user_name, email, imageURL },
+            user_info: { id: userId, user_name, email, imageURL },
             token,
             message: 'Successfully signed up!',
         });
@@ -79,6 +79,82 @@ export const signup = async (req, res) => {
         }
     }
 };
+
+export const shop_signup = async (req, res) => {
+    const {user_name, email, password, imageURL} = req.body;
+    
+    console.log(req.body);
+    try {
+       
+        const [existingUser] = await pool.query('SELECT * FROM users WHERE email = ?', [email])
+        .catch(err => {
+            console.error('Query execution error:', err);
+            throw err;
+        });
+        if (existingUser.length > 0) {
+            return res.status(400).json({message: 'User already exists'});
+        }
+
+        const hashedPassword = await bcrypt.hash(password, 10);
+        const userId = uuidv4();
+        const role= 'shop_owner';
+        const [result] = await pool.query(
+            'INSERT INTO users (id, user_name, email, password, imageURL, role) VALUES (?, ?, ?, ?, ?, ?)', 
+            [userId, user_name, email, hashedPassword, imageURL, role  || null]
+        );
+
+        const transporter = nodemailer.createTransport({
+            host: 'smtp.gmail.com',
+            port: 587,
+            secure: false,
+            auth: {
+                user: process.env.EMAIL_USER,
+                pass: process.env.EMAIL_PASS
+            },
+            tls: {
+                rejectUnauthorized: false
+            }
+        });
+        const otp = Math.floor(100000 + Math.random() * 900000);
+        await pool.query('INSERT INTO otps (user_id, otp) VALUES (?, ?)', [userId, otp]);
+
+        try {
+            await transporter.sendMail({
+                from: process.env.EMAIL_USER,
+                to: email,
+                subject: 'Email Verification',
+                text: `Your OTP is ${otp}`
+            });
+            console.log('Verification email sent successfully');
+        } catch (emailError) {
+            console.error('Email sending error:', emailError);
+            if (emailError.response) {
+                console.error('SMTP Response:', emailError.response);
+            }
+        }
+
+        const token = jwt.sign(
+            { email: user.email, id: user.id },
+            process.env.JWT_SECRET,
+            { expiresIn: '1h' } // Token expires in 1 hour
+          );
+        res.status(201).json({
+            user_info: { id: userId, user_name, email, imageURL },
+            token,
+            message: 'Successfully signed up!',
+        });
+    } catch (err) {
+        console.error('Signup error:', err);
+        if (err.code === 'ER_NO_SUCH_TABLE') {
+            return res.status(500).json({ message: 'Database table not found' });
+        } else if (err.code === 'ER_ACCESS_DENIED_ERROR') {
+            return res.status(500).json({ message: 'Database access denied' });
+        } else {
+            return res.status(500).json({ message: 'Error during signup process', error: err.message });
+        }
+    }
+
+}
 
 export const verifyOTP = async (req, res) => {
     const { otp, user_id } = req.body;  // Changed email to user_id
@@ -135,7 +211,11 @@ export const signin = async (req, res) => {
       }
   
       // Generate token
-      const token = jwt.sign({ email: user.email, id: user.id }, 'PRIVATEKEY');
+      const token = jwt.sign(
+        { email: user.email, id: user.id },
+        process.env.JWT_SECRET,
+        { expiresIn: '1h' } // Token expires in 1 hour
+      );
   
       res.status(201).json({
         user_info: user,
