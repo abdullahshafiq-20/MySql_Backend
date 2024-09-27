@@ -4,7 +4,7 @@ import bcrypt from 'bcrypt';
 export const getProfile = async (req, res) => {
   try {
     const [rows] = await pool.execute(
-      'SELECT id, user_name, email, image_url, is_verified, role, alert_count, created_at, updated_at FROM users WHERE id = ?',
+      'SELECT id, user_name, email, imageURL, is_verified, role, alert_count, created_at, updated_at FROM users WHERE id = ?',
       [req.user.id]
     );
     if (rows.length === 0) {
@@ -20,7 +20,7 @@ export const updateProfile = async (req, res) => {
     const { user_name, email, image_url } = req.body;
     try {
       const [result] = await pool.execute(
-        'UPDATE users SET user_name = ?, email = ?, image_url = ? WHERE id = ?',
+        'UPDATE users SET user_name = ?, email = ?, imageURL = ? WHERE id = ?',
         [user_name, email, image_url, req.user.id]
       );
       if (result.affectedRows === 0) {
