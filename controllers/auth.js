@@ -140,7 +140,7 @@ export const signin = async (req, res) => {
       res.status(201).json({
         user_info: user,
         token,
-        message: 'Successfully signed in!',
+        message: 'Welcome back!',
       });
     } catch (error) {
       console.log(error);
