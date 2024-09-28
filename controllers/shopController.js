@@ -4,7 +4,7 @@ import { v4 as uuidv4 } from 'uuid';
 import nodemailer from 'nodemailer';
 import pool from '../config/database.js';
 import { generateShopId } from '../utils/generateId.js';
-import { getShopDetailsWithStats, getTopSellingItems, getRecentOrdersWithDetails } from '../utils/shopUtils.js';
+import { getShopDetailsWithStats, getTopSellingItems, getRecentOrdersWithDetails, getCustomerInsights, getRevenueOverTime } from '../utils/shopUtils.js';
 
 export const createShop = async (req, res) => {
     const { name, email, description, image_url, phone_number } = req.body;
@@ -75,20 +75,62 @@ export const getShopDetails = async (req, res) => {
 
   export const ShopDashboard = async (req, res) => {
     try {
-      const shopId = req.params.shopId;
-      console.log(shopId);
-      const shopDetails = await getShopDetailsWithStats(shopId);
-      console.log(shopDetails);
-      const topItems = await getTopSellingItems(shopId, 1);
-      console.log(topItems);
-      const recentOrders = await getRecentOrdersWithDetails(shopId, 5);
-  
-      res.json({
-        shopDetails,
-        topSellingItems: topItems,
-        recentOrders
-      });
+        const shopId = req.params.shopId;
+        const shopDetails = await getShopDetailsWithStats(shopId);
+        const topItems = await getTopSellingItems(shopId, 5);
+        const recentOrders = await getRecentOrdersWithDetails(shopId, 5);
+        const revenueOverTime = await getRevenueOverTime(shopId, 'last_30_days');
+        const customerInsights = await getCustomerInsights(shopId);
+
+        res.json({
+            shopDetails,
+            topSellingItems: topItems,
+            recentOrders,
+            revenueOverTime,
+            customerInsights
+        });
     } catch (error) {
-      res.status(500).json({ error: 'Failed to fetch dashboard data', message: error.message });
+        res.status(500).json({ error: 'Failed to fetch dashboard data', message: error.message });
+    }
+};
+
+  export const getOwnerShops = async (req, res) => {
+    const userId = req.user.id; // Assuming the user ID is available in req.user after authentication
+    console.log(userId);
+  
+    try {
+      // First, check if the user is an owner
+      const [ownerCheck] = await pool.execute(
+        'SELECT role FROM users WHERE id = ?',
+        [userId]
+      );
+  
+      if (ownerCheck.length === 0 || ownerCheck[0].role !== 'shop_owner') {
+        return res.status(403).json({ error: 'Access denied', message: 'User is not an owner' });
+      }
+  
+      // If the user is an owner, fetch all their shops
+      const [shops] = await pool.execute(
+        'SELECT id, name FROM shops WHERE owner_id = ?',
+        [userId]
+      );
+  
+      res.status(200).json({ 
+        ownerId: userId,
+        shops: shops.map(shop => ({ id: shop.id, name: shop.name }))
+      });
+  
+    } catch (error) {
+      console.error('Error fetching owner shops:', error);
+      res.status(500).json({ error: 'Failed to fetch shops', message: error.message });
+    }
+  };
+
+  export const getAllShops = async (req, res) => {
+    try {
+      const [rows] = await pool.execute('SELECT id, name, email, description, image_url, phone_number FROM shops');
+      res.status(200).json(rows);
+    } catch (error) {
+      res.status(500).json({ error: 'Failed to get shops', message: error.message });
     }
   }

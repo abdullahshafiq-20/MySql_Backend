@@ -75,6 +75,7 @@ export const getMenuItem = async (req, res) => {
 
 export const getAllMenuItems = async (req, res) => {
     const { shop_id } = req.params;
+    console.log(shop_id);
   
     try {
       const [rows] = await pool.execute(

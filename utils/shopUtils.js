@@ -1,16 +1,16 @@
 import pool from '../config/database.js';
 
- const getShopDetailsWithStats = async (shopId) => {
+const getShopDetailsWithStats = async (shopId) => {
     const [rows] = await pool.execute(`
-        SELECT s.*, 
-               (SELECT COUNT(*) FROM menu_items WHERE shop_id = s.id) as total_menu_items,
-               (SELECT COUNT(*) FROM orders WHERE shop_id = s.id) as total_orders
+        SELECT s.*, ss.*
         FROM shops s
+        JOIN shop_statistics ss ON s.id = ss.shop_id
         WHERE s.id = ?
     `, [shopId]);
 
     return rows[0];
 };
+
 
 const getTopSellingItems = async (shopId, limit = 5, metric = 'quantity') => {
     try {
@@ -84,5 +84,50 @@ const getRecentOrdersWithDetails = async (shopId, limit = 10) => {
         throw error;
     }
 };
+const getRevenueOverTime = async (shopId, period = 'last_30_days') => {
+    let dateFilter;
+    switch (period) {
+        case 'last_7_days':
+            dateFilter = 'AND o.created_at >= DATE_SUB(CURDATE(), INTERVAL 7 DAY)';
+            break;
+        case 'last_30_days':
+            dateFilter = 'AND o.created_at >= DATE_SUB(CURDATE(), INTERVAL 30 DAY)';
+            break;
+        case 'last_year':
+            dateFilter = 'AND o.created_at >= DATE_SUB(CURDATE(), INTERVAL 1 YEAR)';
+            break;
+        default:
+            dateFilter = '';
+    }
+
+    const [rows] = await pool.execute(`
+        SELECT DATE(o.created_at) as date, SUM(o.total_price) as daily_revenue
+        FROM orders o
+        WHERE o.shop_id = ? AND o.status = 'delivered' ${dateFilter}
+        GROUP BY DATE(o.created_at)
+        ORDER BY date
+    `, [shopId]);
+
+    return rows;
+};
+const getCustomerInsights = async (shopId) => {
+    const [rows] = await pool.execute(`
+        SELECT 
+            u.id as user_id,
+            u.user_name,
+            COUNT(DISTINCT o.order_id) as order_count,
+            SUM(o.total_price) as total_spent,
+            AVG(o.total_price) as average_order_value,
+            MAX(o.created_at) as last_order_date
+        FROM users u
+        JOIN orders o ON u.id = o.user_id
+        WHERE o.shop_id = ? AND o.status = 'delivered'
+        GROUP BY u.id, u.user_name
+        ORDER BY total_spent DESC
+        LIMIT 10
+    `, [shopId]);
+
+    return rows;
+};
   
-  export { getShopDetailsWithStats, getTopSellingItems, getRecentOrdersWithDetails };
+  export { getShopDetailsWithStats, getTopSellingItems, getRecentOrdersWithDetails, getRevenueOverTime, getCustomerInsights };

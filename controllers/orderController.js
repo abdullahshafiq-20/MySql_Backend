@@ -201,6 +201,69 @@ export const updateOrderStatus = async (req, res) => {
     }
 };
 
+export const listShopOrders = async (req, res) => {
+    const shopOwnerId = req.user.id;
+    
+    try {
+        const connection = await pool.getConnection();
+        
+        try {
+            // First, get the shop_id for the shop owner
+            const [shopRows] = await connection.execute(
+                'SELECT id FROM shops WHERE owner_id = ?',
+                [shopOwnerId]
+            );
+
+            if (shopRows.length === 0) {
+                return res.status(404).json({ error: 'Shop not found for this owner' });
+            }
+
+            const shopId = shopRows[0].id;
+
+            // Verify shop ownership
+            const isOwner = await checkShopOwnership(shopOwnerId, shopId);
+            if (!isOwner) {
+                return res.status(403).json({ error: 'You are not authorized to view these orders' });
+            }
+
+            // Get all orders for this shop
+            const [orderRows] = await connection.execute(
+                `SELECT o.*, u.user_name, u.email
+                 FROM orders o
+                 JOIN users u ON o.user_id = u.id
+                 WHERE o.shop_id = ?
+                 ORDER BY o.created_at DESC`,
+                [shopId]
+            );
+
+            // Get order items for each order
+            const ordersWithItems = await Promise.all(orderRows.map(async (order) => {
+                const [itemRows] = await connection.execute(
+                    `SELECT oi.*, mi.name as item_name 
+                     FROM order_items oi
+                     JOIN menu_items mi ON oi.item_id = mi.item_id
+                     WHERE oi.order_id = ?`,
+                    [order.order_id]
+                );
+                return { ...order, items: itemRows };
+            }));
+
+            res.status(200).json({
+                shop_id: shopId,
+                orders: ordersWithItems
+            });
+        } finally {
+            connection.release();
+        }
+    } catch (error) {
+        console.error('List shop orders error:', error);
+        res.status(500).json({ 
+            error: 'Failed to list shop orders', 
+            message: error.message,
+            stack: error.stack
+        });
+    }
+};
 
 
 
