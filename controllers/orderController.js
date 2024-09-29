@@ -177,6 +177,14 @@ export const updateOrderStatus = async (req, res) => {
                 [status, orderId]
             );
 
+            // If the status is changed to "delivered", update the shop's total revenue
+            if (status === 'delivered') {
+                await connection.execute(
+                    'UPDATE shops SET total_revenue = total_revenue + ? WHERE id = ?',
+                    [order.total_price, order.shop_id]
+                );
+            }
+
             // If the status is changed to "discarded", increment the user's alert count
             if (status === 'discarded') {
                 await incrementAlertCount(order.user_id);
