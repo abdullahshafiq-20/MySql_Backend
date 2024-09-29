@@ -29,7 +29,7 @@ export const updateProfile = async (req, res) => {
     }
     
     const [rows] = await pool.execute(
-      'SELECT id, user_name, email, imageURL, is_verified, role, alert_count, created_at, FROM users WHERE id = ?',
+      'SELECT id, user_name, email, imageURL, is_verified, role, alert_count, created_at FROM users WHERE id = ?',
       [req.user.id]
     );
     
