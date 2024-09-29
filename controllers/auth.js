@@ -141,7 +141,7 @@ export const shop_signup = async (req, res) => {
         }
 
         const token = jwt.sign(
-            { email: user.email, id: user.id },
+            { email: email, id: userId, role: role },
             process.env.JWT_SECRET,
             { expiresIn: '1h' } // Token expires in 1 hour
           );
