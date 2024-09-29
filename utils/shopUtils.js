@@ -129,5 +129,13 @@ const getCustomerInsights = async (shopId) => {
 
     return rows;
 };
+
+const getRevenue = async (shopId) => {
+    const [rows] = await pool.execute(`
+        SELECT total_revenue from shops WHERE id = ?
+    `, [shopId]);
+
+    return rows[0].total_revenue;
+}
   
-  export { getShopDetailsWithStats, getTopSellingItems, getRecentOrdersWithDetails, getRevenueOverTime, getCustomerInsights };
+  export { getShopDetailsWithStats, getTopSellingItems, getRecentOrdersWithDetails, getRevenueOverTime, getCustomerInsights, getRevenue };

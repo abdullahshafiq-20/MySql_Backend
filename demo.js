@@ -7,7 +7,7 @@ dotenv.config();
 
 // Create a connection pool
 const pool = mysql.createPool({
-  host: 'localhost',
+  host: process.env.DB_HOST,
   user: process.env.DB_USER,
   password: process.env.DB_PASS,
   database: process.env.DB_NAME,
@@ -29,8 +29,7 @@ async function createTables() {
         is_verified BOOLEAN DEFAULT TRUE,
         role VARCHAR(50) DEFAULT 'student',
         alert_count INT DEFAULT 0,
-        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-        updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
       )
     `);
 
@@ -57,7 +56,6 @@ async function createTables() {
         image_url VARCHAR(255),
         phone_number VARCHAR(20),
         created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-        updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
         FOREIGN KEY (owner_id) REFERENCES users(id)
       )
     `);
@@ -71,7 +69,6 @@ async function createTables() {
         description TEXT,
         price DECIMAL(10, 2) NOT NULL,
         created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-        updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
         FOREIGN KEY (shop_id) REFERENCES shops(id)
       )
     `);
@@ -85,7 +82,6 @@ async function createTables() {
         total_price DECIMAL(10, 2) NOT NULL,
         status ENUM('pending', 'accepted', 'delivered', 'discarded') DEFAULT 'pending',
         created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-        updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
         FOREIGN KEY (user_id) REFERENCES users(id),
         FOREIGN KEY (shop_id) REFERENCES shops(id)
       )
@@ -125,21 +121,21 @@ async function insertDemoData() {
 
     // Insert users (2 teachers, 3 students, 3 shop owners)
     const users = [
-      { id: uuidv4(), user_name: 'Teacher1', email: 'teacher1@example.com', password: 'password123', role: 'teacher' },
-      { id: uuidv4(), user_name: 'Teacher2', email: 'teacher2@example.com', password: 'password123', role: 'teacher' },
-      { id: uuidv4(), user_name: 'Student1', email: 'student1@example.com', password: 'password123', role: 'student' },
-      { id: uuidv4(), user_name: 'Student2', email: 'student2@example.com', password: 'password123', role: 'student' },
-      { id: uuidv4(), user_name: 'Student3', email: 'student3@example.com', password: 'password123', role: 'student' },
-      { id: uuidv4(), user_name: 'ShopOwner1', email: 'owner1@example.com', password: 'password123', role: 'shop_owner' },
-      { id: uuidv4(), user_name: 'ShopOwner2', email: 'owner2@example.com', password: 'password123', role: 'shop_owner' },
-      { id: uuidv4(), user_name: 'ShopOwner3', email: 'owner3@example.com', password: 'password123', role: 'shop_owner' },
+      { id: uuidv4(), user_name: 'Teacher1', email: 'teacher1@example.com', password: 'password123', role: 'teacher', is_verified : '1' },
+      { id: uuidv4(), user_name: 'Teacher2', email: 'teacher2@example.com', password: 'password123', role: 'teacher', is_verified : '1'},
+      { id: uuidv4(), user_name: 'Student1', email: 'student1@example.com', password: 'password123', role: 'student', is_verified : '1'},
+      { id: uuidv4(), user_name: 'Student2', email: 'student2@example.com', password: 'password123', role: 'student', is_verified : '1'},
+      { id: uuidv4(), user_name: 'Student3', email: 'student3@example.com', password: 'password123', role: 'student', is_verified : '1'},
+      { id: uuidv4(), user_name: 'ShopOwner1', email: 'owner1@example.com', password: 'password123', role: 'shop_owner', is_verified : '1'},
+      { id: uuidv4(), user_name: 'ShopOwner2', email: 'owner2@example.com', password: 'password123', role: 'shop_owner', is_verified : '1'},
+      { id: uuidv4(), user_name: 'ShopOwner3', email: 'owner3@example.com', password: 'password123', role: 'shop_owner', is_verified : '1'},
     ];
 
     for (const user of users) {
       const hashedPassword = await bcrypt.hash(user.password, 10);
       await connection.execute(
-        'INSERT INTO users (id, user_name, email, password, role) VALUES (?, ?, ?, ?, ?)',
-        [user.id, user.user_name, user.email, hashedPassword, user.role]
+        'INSERT INTO users (id, user_name, email, password, role, is_verified) VALUES (?, ?, ?, ?, ?, ?)',
+        [user.id, user.user_name, user.email, hashedPassword, user.role, user.is_verified]
       );
     }
 

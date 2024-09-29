@@ -4,7 +4,7 @@ import { v4 as uuidv4 } from 'uuid';
 import nodemailer from 'nodemailer';
 import pool from '../config/database.js';
 import { generateShopId } from '../utils/generateId.js';
-import { getShopDetailsWithStats, getTopSellingItems, getRecentOrdersWithDetails, getCustomerInsights, getRevenueOverTime } from '../utils/shopUtils.js';
+import { getShopDetailsWithStats, getTopSellingItems, getRecentOrdersWithDetails, getCustomerInsights, getRevenueOverTime, getRevenue} from '../utils/shopUtils.js';
 
 export const createShop = async (req, res) => {
     const { name, email, description, image_url, phone_number } = req.body;
@@ -81,13 +81,15 @@ export const getShopDetails = async (req, res) => {
         const recentOrders = await getRecentOrdersWithDetails(shopId, 5);
         const revenueOverTime = await getRevenueOverTime(shopId, 'last_30_days');
         const customerInsights = await getCustomerInsights(shopId);
+        const revenue = await getRevenue(shopId);
 
         res.json({
             shopDetails,
             topSellingItems: topItems,
             recentOrders,
             revenueOverTime,
-            customerInsights
+            customerInsights,
+            revenue
         });
     } catch (error) {
         res.status(500).json({ error: 'Failed to fetch dashboard data', message: error.message });

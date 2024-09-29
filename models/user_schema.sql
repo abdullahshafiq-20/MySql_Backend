@@ -1,6 +1,6 @@
 
 
-CREATE TABLE v3.users (
+CREATE TABLE sql5734220.users (
     id VARCHAR(36) PRIMARY KEY,
     user_name VARCHAR(255) NOT NULL,
     email VARCHAR(255) NOT NULL UNIQUE,
@@ -13,7 +13,7 @@ CREATE TABLE v3.users (
     updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
 );
 
-CREATE TABLE v3.otps (
+CREATE TABLE sql5734220.otps (
     id INT AUTO_INCREMENT PRIMARY KEY,
     otp VARCHAR(6) NOT NULL,
     user_id VARCHAR(36),
@@ -22,7 +22,7 @@ CREATE TABLE v3.otps (
     FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
 );
 
-CREATE TABLE v3.shops (
+CREATE TABLE sql5734220.shops (
     id VARCHAR(36) PRIMARY KEY,
     owner_id VARCHAR(36) NOT NULL,
     name VARCHAR(255) NOT NULL,
@@ -36,7 +36,7 @@ CREATE TABLE v3.shops (
     FOREIGN KEY (owner_id) REFERENCES users(id)
 );
 
-CREATE TABLE v3.menu_items (
+CREATE TABLE sql5734220.menu_items (
     item_id VARCHAR(36) PRIMARY KEY,
     shop_id VARCHAR(36) NOT NULL,
     name VARCHAR(255) NOT NULL,
@@ -47,7 +47,7 @@ CREATE TABLE v3.menu_items (
     FOREIGN KEY (shop_id) REFERENCES shops(id)
 );
 
-CREATE TABLE v3.orders (
+CREATE TABLE sql5734220.orders (
     order_id VARCHAR(36) PRIMARY KEY,
     user_id VARCHAR(36) NOT NULL,
     shop_id VARCHAR(36) NOT NULL,
@@ -59,7 +59,7 @@ CREATE TABLE v3.orders (
     FOREIGN KEY (shop_id) REFERENCES shops(id)
 );
 
-CREATE TABLE v3.order_items (
+CREATE TABLE sql5734220.order_items (
     id INT AUTO_INCREMENT PRIMARY KEY,
     order_id VARCHAR(36) NOT NULL,
     item_id VARCHAR(36) NOT NULL,
@@ -69,7 +69,7 @@ CREATE TABLE v3.order_items (
     FOREIGN KEY (item_id) REFERENCES menu_items(item_id)
 );
 
-CREATE OR REPLACE VIEW v3.shop_statistics AS
+CREATE OR REPLACE VIEW sql5734220.shop_statistics AS
 SELECT 
     s.id AS shop_id,
     s.name AS shop_name,
@@ -78,10 +78,10 @@ SELECT
     AVG(o.total_price) AS average_order_value,
     SUM(CASE WHEN o.status = 'delivered' THEN o.total_price ELSE 0 END) AS total_revenue
 FROM 
-    v3.shops s
+    sql5734220.shops s
+LEFT JOIN a
+    sql5734220.orders o ON s.id = o.shop_id
 LEFT JOIN 
-    v3.orders o ON s.id = o.shop_id
-LEFT JOIN 
-    v3.menu_items mi ON s.id = mi.shop_id
+    sql5734220.menu_items mi ON s.id = mi.shop_id
 GROUP BY 
     s.id, s.name;
