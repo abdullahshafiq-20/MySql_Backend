@@ -1,4 +1,5 @@
 import pool from '../config/database.js';
+import {io } from '../app.js';
 import  {generateOrderId}  from '../utils/generateId.js'; 
 import { checkShopOwnership, incrementAlertCount } from '../utils/orderUtils.js';
 
@@ -52,14 +53,37 @@ export const createOrder = async (req, res) => {
                     [order_id, item.item_id, item.quantity, item_price]
                 );
             }
-
             await connection.commit();
+
+            const [orderDetails] = await connection.execute(
+                `SELECT o.*, u.user_name, u.email
+                 FROM orders o
+                 JOIN users u ON o.user_id = u.id
+                 WHERE o.order_id = ?`,
+                [order_id]
+              );
+        
+              const [orderItems] = await connection.execute(
+                `SELECT oi.*, mi.name as item_name, mi.price
+                 FROM order_items oi
+                 JOIN menu_items mi ON oi.item_id = mi.item_id
+                 WHERE oi.order_id = ?`,
+                [order_id]
+              );
+              
+              const fullOrderDetails = {
+                ...orderDetails[0],
+                items: orderItems
+              };
+
+              io.emit('newOrder', fullOrderDetails);
 
             res.status(201).json({
                 message: 'Order created successfully',
                 order_id,
                 total_price,
-                user_role
+                user_role,
+                fullOrderDetails
             });
         } catch (error) {
             await connection.rollback();
@@ -72,7 +96,6 @@ export const createOrder = async (req, res) => {
         res.status(500).json({ error: 'Failed to create order', message: error.message });
     }
 };
-
 
 
   export const getOrderDetails = async (req, res) => {
@@ -192,10 +215,34 @@ export const updateOrderStatus = async (req, res) => {
 
             await connection.commit();
 
+            const [updatedOrderRows] = await connection.execute(
+                `SELECT o.*, u.user_name, u.email
+                 FROM orders o
+                 JOIN users u ON o.user_id = u.id
+                 WHERE o.order_id = ?`,
+                [orderId]
+            );
+
+            const [orderItems] = await connection.execute(
+                `SELECT oi.*, mi.name as item_name, mi.price
+                 FROM order_items oi
+                 JOIN menu_items mi ON oi.item_id = mi.item_id
+                 WHERE oi.order_id = ?`,
+                [orderId]
+            );
+
+            const fullUpdatedOrder = {
+                ...updatedOrderRows[0],
+                items: orderItems
+            };
+
+            io.emit('orderUpdate', fullUpdatedOrder);
+
             res.status(200).json({
                 message: 'Order status updated successfully',
                 orderId,
-                newStatus: status
+                newStatus: status,
+                fullUpdatedOrder
             });
         } catch (error) {
             await connection.rollback();
