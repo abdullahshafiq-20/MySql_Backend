@@ -1,6 +1,5 @@
-
-
-CREATE TABLE sql5734220.users (
+-- Users table
+CREATE TABLE users (
     id VARCHAR(36) PRIMARY KEY,
     user_name VARCHAR(255) NOT NULL,
     email VARCHAR(255) NOT NULL UNIQUE,
@@ -13,7 +12,8 @@ CREATE TABLE sql5734220.users (
     updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
 );
 
-CREATE TABLE sql5734220.otps (
+-- OTPs table
+CREATE TABLE otps (
     id INT AUTO_INCREMENT PRIMARY KEY,
     otp VARCHAR(6) NOT NULL,
     user_id VARCHAR(36),
@@ -22,21 +22,36 @@ CREATE TABLE sql5734220.otps (
     FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
 );
 
-CREATE TABLE sql5734220.shops (
+-- Shops table (modified)
+CREATE TABLE shops (
     id VARCHAR(36) PRIMARY KEY,
     owner_id VARCHAR(36) NOT NULL,
     name VARCHAR(255) NOT NULL,
-    email VARCHAR(255) NOT NULL,
     description TEXT,
     image_url VARCHAR(255),
-    phone_number VARCHAR(20),
     total_revenue DECIMAL(10, 2) DEFAULT 0.00,
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
     FOREIGN KEY (owner_id) REFERENCES users(id)
 );
 
-CREATE TABLE sql5734220.menu_items (
+-- New Shop Contacts table
+CREATE TABLE shop_contacts (
+    id INT AUTO_INCREMENT PRIMARY KEY,
+    shop_id VARCHAR(36) NOT NULL,
+    email VARCHAR(255),
+    contact_number VARCHAR(20),
+    full_name VARCHAR(255),
+    payment_method ENUM('jazzcash', 'easypaisa', 'sadapay', 'nayapay') NOT NULL,
+    payment_details VARCHAR(255) NOT NULL,
+    is_primary BOOLEAN DEFAULT FALSE,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+    FOREIGN KEY (shop_id) REFERENCES shops(id) ON DELETE CASCADE
+);
+
+-- Menu Items table
+CREATE TABLE menu_items (
     item_id VARCHAR(36) PRIMARY KEY,
     shop_id VARCHAR(36) NOT NULL,
     name VARCHAR(255) NOT NULL,
@@ -47,7 +62,8 @@ CREATE TABLE sql5734220.menu_items (
     FOREIGN KEY (shop_id) REFERENCES shops(id)
 );
 
-CREATE TABLE sql5734220.orders (
+-- Orders table
+CREATE TABLE orders (
     order_id VARCHAR(36) PRIMARY KEY,
     user_id VARCHAR(36) NOT NULL,
     shop_id VARCHAR(36) NOT NULL,
@@ -59,7 +75,8 @@ CREATE TABLE sql5734220.orders (
     FOREIGN KEY (shop_id) REFERENCES shops(id)
 );
 
-CREATE TABLE sql5734220.order_items (
+-- Order Items table
+CREATE TABLE order_items (
     id INT AUTO_INCREMENT PRIMARY KEY,
     order_id VARCHAR(36) NOT NULL,
     item_id VARCHAR(36) NOT NULL,
@@ -69,7 +86,10 @@ CREATE TABLE sql5734220.order_items (
     FOREIGN KEY (item_id) REFERENCES menu_items(item_id)
 );
 
-CREATE OR REPLACE VIEW sql5734220.shop_statistics AS
+
+
+-- Shop Statistics view
+CREATE OR REPLACE VIEW shop_statistics AS
 SELECT 
     s.id AS shop_id,
     s.name AS shop_name,
@@ -78,10 +98,10 @@ SELECT
     AVG(o.total_price) AS average_order_value,
     SUM(CASE WHEN o.status = 'delivered' THEN o.total_price ELSE 0 END) AS total_revenue
 FROM 
-    sql5734220.shops s
-LEFT JOIN a
-    sql5734220.orders o ON s.id = o.shop_id
+    shops s
 LEFT JOIN 
-    sql5734220.menu_items mi ON s.id = mi.shop_id
+    orders o ON s.id = o.shop_id
+LEFT JOIN 
+    menu_items mi ON s.id = mi.shop_id
 GROUP BY 
     s.id, s.name;

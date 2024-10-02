@@ -5,8 +5,10 @@ import bodyParser from 'body-parser';
 import { createServer } from 'http';
 import { Server } from 'socket.io';
 import route from "./routes/routes.js";
+import { cloudinaryConfig } from './utils/cloudinary.js';
 
 dotenv.config();
+cloudinaryConfig();
 const app = express();
 const httpServer = createServer(app);
 const io = new Server(httpServer, {

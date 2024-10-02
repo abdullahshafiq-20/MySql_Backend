@@ -5,209 +5,201 @@ import bcrypt from 'bcrypt';
 
 dotenv.config();
 
-// Create a connection pool
+// Database connection configuration
 const pool = mysql.createPool({
-  host: process.env.DB_HOST,
-  user: process.env.DB_USER,
-  password: process.env.DB_PASS,
-  database: process.env.DB_NAME,
+    host: process.env.DB_HOST,
+    user: process.env.DB_USER,
+    password: process.env.DB_PASS,
+    database: process.env.DB_NAME,
+    port: process.env.DB_PORT
 });
 
-async function createTables() {
-  const connection = await pool.getConnection();
-  try {
-    await connection.beginTransaction();
+// Sample data with plain passwords
+const demoData = {
+  students: [
+      { id: uuidv4(), user_name: 'John Doe', email: 'john@student.com', password: 'student123', is_verified: 1, role: 'student' },
+      { id: uuidv4(), user_name: 'Jane Smith', email: 'jane@student.com', password: 'student456', is_verified: 1, role: 'student' },
+      { id: uuidv4(), user_name: 'Mike Wilson', email: 'mike@student.com', password: 'student789', is_verified: 1, role: 'student' }
+  ],
+  teachers: [
+      { id: uuidv4(), user_name: 'Prof. Anderson', email: 'anderson@teacher.com', password: 'teacher123', is_verified: 1, role: 'teacher' },
+      { id: uuidv4(), user_name: 'Dr. Brown', email: 'brown@teacher.com', password: 'teacher456', is_verified: 1, role: 'teacher' },
+      { id: uuidv4(), user_name: 'Prof. Carter', email: 'carter@teacher.com', password: 'teacher789', is_verified: 1, role: 'teacher' }
+  ],
+  shopOwners: [
+      { id: uuidv4(), user_name: 'Ali Khan', email: 'ali@shop.com', password: 'shop123', is_verified: 1, role: 'shop_owner' },
+      { id: uuidv4(), user_name: 'Sara Ahmed', email: 'sara@shop.com', password: 'shop456', is_verified: 1, role: 'shop_owner' },
+      { id: uuidv4(), user_name: 'Hassan Ali', email: 'hassan@shop.com', password: 'shop789', is_verified: 1, role: 'shop_owner' }
+  ]
+};
 
-    // Create users table
-    await connection.execute(`
-      CREATE TABLE IF NOT EXISTS users (
-        id VARCHAR(36) PRIMARY KEY,
-        user_name VARCHAR(255) NOT NULL,
-        email VARCHAR(255) NOT NULL UNIQUE,
-        password VARCHAR(255) NOT NULL,
-        imageURL VARCHAR(255),
-        is_verified BOOLEAN DEFAULT TRUE,
-        role VARCHAR(50) DEFAULT 'student',
-        alert_count INT DEFAULT 0,
-        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-      )
-    `);
+// Password hashing function
+async function hashPassword(plainPassword) {
+  const saltRounds = 10;
+  return await bcrypt.hash(plainPassword, saltRounds);
+}
 
-    // Create otps table
-    await connection.execute(`
-      CREATE TABLE IF NOT EXISTS otps (
-        id INT AUTO_INCREMENT PRIMARY KEY,
-        otp VARCHAR(6) NOT NULL,
-        user_id VARCHAR(36),
-        isUsed BOOLEAN DEFAULT FALSE,
-        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-        FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
-      )
-    `);
-
-    // Create shops table
-    await connection.execute(`
-      CREATE TABLE IF NOT EXISTS shops (
-        id VARCHAR(36) PRIMARY KEY,
-        owner_id VARCHAR(36) NOT NULL,
-        name VARCHAR(255) NOT NULL,
-        email VARCHAR(255) NOT NULL,
-        description TEXT,
-        image_url VARCHAR(255),
-        phone_number VARCHAR(20),
-        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-        FOREIGN KEY (owner_id) REFERENCES users(id)
-      )
-    `);
-
-    // Create menu_items table
-    await connection.execute(`
-      CREATE TABLE IF NOT EXISTS menu_items (
-        item_id VARCHAR(36) PRIMARY KEY,
-        shop_id VARCHAR(36) NOT NULL,
-        name VARCHAR(255) NOT NULL,
-        description TEXT,
-        price DECIMAL(10, 2) NOT NULL,
-        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-        FOREIGN KEY (shop_id) REFERENCES shops(id)
-      )
-    `);
-
-    // Create orders table
-    await connection.execute(`
-      CREATE TABLE IF NOT EXISTS orders (
-        order_id VARCHAR(36) PRIMARY KEY,
-        user_id VARCHAR(36) NOT NULL,
-        shop_id VARCHAR(36) NOT NULL,
-        total_price DECIMAL(10, 2) NOT NULL,
-        status ENUM('pending', 'accepted', 'delivered', 'discarded') DEFAULT 'pending',
-        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-        FOREIGN KEY (user_id) REFERENCES users(id),
-        FOREIGN KEY (shop_id) REFERENCES shops(id)
-      )
-    `);
-
-    // Create order_items table
-    await connection.execute(`
-      CREATE TABLE IF NOT EXISTS order_items (
-        id INT AUTO_INCREMENT PRIMARY KEY,
-        order_id VARCHAR(36) NOT NULL,
-        item_id VARCHAR(36) NOT NULL,
-        quantity INT NOT NULL,
-        price DECIMAL(10, 2) NOT NULL,
-        FOREIGN KEY (order_id) REFERENCES orders(order_id),
-        FOREIGN KEY (item_id) REFERENCES menu_items(item_id)
-      )
-    `);
-
-    await connection.commit();
-    console.log('Tables created successfully');
-  } catch (error) {
-    await connection.rollback();
-    console.error('Error creating tables:', error);
-  } finally {
-    connection.release();
-  }
+// Password verification function
+async function verifyPassword(plainPassword, hashedPassword) {
+  return await bcrypt.compare(plainPassword, hashedPassword);
 }
 
 async function insertDemoData() {
-  console.log("user ", process.env.DB_USER);
-  console.log("password ", process.env.DB_PASS);
-  console.log("database ", process.env.DB_NAME);
   const connection = await pool.getConnection();
-  
   try {
-    await connection.beginTransaction();
+      await connection.beginTransaction();
 
-    // Insert users (2 teachers, 3 students, 3 shop owners)
-    const users = [
-      { id: uuidv4(), user_name: 'Teacher1', email: 'teacher1@example.com', password: 'password123', role: 'teacher', is_verified : '1' },
-      { id: uuidv4(), user_name: 'Teacher2', email: 'teacher2@example.com', password: 'password123', role: 'teacher', is_verified : '1'},
-      { id: uuidv4(), user_name: 'Student1', email: 'student1@example.com', password: 'password123', role: 'student', is_verified : '1'},
-      { id: uuidv4(), user_name: 'Student2', email: 'student2@example.com', password: 'password123', role: 'student', is_verified : '1'},
-      { id: uuidv4(), user_name: 'Student3', email: 'student3@example.com', password: 'password123', role: 'student', is_verified : '1'},
-      { id: uuidv4(), user_name: 'ShopOwner1', email: 'owner1@example.com', password: 'password123', role: 'shop_owner', is_verified : '1'},
-      { id: uuidv4(), user_name: 'ShopOwner2', email: 'owner2@example.com', password: 'password123', role: 'shop_owner', is_verified : '1'},
-      { id: uuidv4(), user_name: 'ShopOwner3', email: 'owner3@example.com', password: 'password123', role: 'shop_owner', is_verified : '1'},
-    ];
-
-    for (const user of users) {
-      const hashedPassword = await bcrypt.hash(user.password, 10);
-      await connection.execute(
-        'INSERT INTO users (id, user_name, email, password, role, is_verified) VALUES (?, ?, ?, ?, ?, ?)',
-        [user.id, user.user_name, user.email, hashedPassword, user.role, user.is_verified]
-      );
-    }
-
-    // Insert shops
-    const shops = [
-      { id: uuidv4(), owner_id: users[5].id, name: 'Shop1', email: 'shop1@example.com', description: 'First shop' },
-      { id: uuidv4(), owner_id: users[6].id, name: 'Shop2', email: 'shop2@example.com', description: 'Second shop' },
-      { id: uuidv4(), owner_id: users[7].id, name: 'Shop3', email: 'shop3@example.com', description: 'Third shop' },
-    ];
-
-    for (const shop of shops) {
-      await connection.execute(
-        'INSERT INTO shops (id, owner_id, name, email, description) VALUES (?, ?, ?, ?, ?)',
-        [shop.id, shop.owner_id, shop.name, shop.email, shop.description]
-      );
-    }
-
-    // Insert menu items (5 items per shop)
-    for (const shop of shops) {
-      for (let i = 1; i <= 5; i++) {
-        await connection.execute(
-          'INSERT INTO menu_items (item_id, shop_id, name, description, price) VALUES (?, ?, ?, ?, ?)',
-          [uuidv4(), shop.id, `Item${i}`, `Description for Item${i}`, 10.99 + i]
-        );
+      // Insert users with hashed passwords
+      const allUsers = [...demoData.students, ...demoData.teachers, ...demoData.shopOwners];
+      for (const user of allUsers) {
+          const hashedPassword = await hashPassword(user.password);
+          await connection.query(
+              'INSERT INTO users (id, user_name, email, password, is_verified, role) VALUES (?, ?, ?, ?, ?, ?)',
+              [user.id, user.user_name, user.email, hashedPassword, user.is_verified, user.role]
+          );
+          console.log(`User created: ${user.user_name}`);
+          console.log(`Original password: ${user.password}`);
+          console.log(`Hashed password: ${hashedPassword}`);
+          console.log('-------------------');
       }
-    }
 
-    // Insert some orders
-    const orders = [
-      { id: uuidv4(), user_id: users[2].id, shop_id: shops[0].id, total_price: 32.97 },
-      { id: uuidv4(), user_id: users[3].id, shop_id: shops[1].id, total_price: 54.95 },
-      { id: uuidv4(), user_id: users[4].id, shop_id: shops[2].id, total_price: 43.96 },
-    ];
+      // Create shops with their menu items
+      const shopsData = [
+          {
+              id: uuidv4(),
+              owner_id: demoData.shopOwners[0].id,
+              name: 'Campus Café',
+              description: 'Best coffee and snacks',
+              menuItems: [
+                  { id: uuidv4(), name: 'Cappuccino', price: 150.00, description: 'Italian coffee' },
+                  { id: uuidv4(), name: 'Sandwich', price: 200.00, description: 'Club sandwich' },
+                  { id: uuidv4(), name: 'Pasta', price: 250.00, description: 'Creamy pasta' }
+              ]
+          },
+          {
+              id: uuidv4(),
+              owner_id: demoData.shopOwners[1].id,
+              name: 'Book Corner',
+              description: 'Books and stationery',
+              menuItems: [
+                  { id: uuidv4(), name: 'Notebook', price: 100.00, description: 'Spiral notebook' },
+                  { id: uuidv4(), name: 'Pen Set', price: 150.00, description: 'Premium pen set' },
+                  { id: uuidv4(), name: 'Calculator', price: 300.00, description: 'Scientific calculator' }
+              ]
+          },
+          {
+              id: uuidv4(),
+              owner_id: demoData.shopOwners[2].id,
+              name: 'Quick Bites',
+              description: 'Fast food and beverages',
+              menuItems: [
+                  { id: uuidv4(), name: 'Burger', price: 180.00, description: 'Chicken burger' },
+                  { id: uuidv4(), name: 'Fries', price: 120.00, description: 'Crispy fries' },
+                  { id: uuidv4(), name: 'Cola', price: 80.00, description: 'Cold drink' }
+              ]
+          }
+      ];
 
-    for (const order of orders) {
-      await connection.execute(
-        'INSERT INTO orders (order_id, user_id, shop_id, total_price) VALUES (?, ?, ?, ?)',
-        [order.id, order.user_id, order.shop_id, order.total_price]
-      );
-    }
+      // Insert shops and their data
+      for (const shop of shopsData) {
+          // Insert shop
+          await connection.query(
+              'INSERT INTO shops (id, owner_id, name, description) VALUES (?, ?, ?, ?)',
+              [shop.id, shop.owner_id, shop.name, shop.description]
+          );
 
-    // Insert order items (assuming 2 items per order)
-    const [menuItems] = await connection.execute('SELECT item_id, price FROM menu_items');
-    for (const order of orders) {
-      for (let i = 0; i < 2; i++) {
-        const menuItem = menuItems[Math.floor(Math.random() * menuItems.length)];
-        await connection.execute(
-          'INSERT INTO order_items (order_id, item_id, quantity, price) VALUES (?, ?, ?, ?)',
-          [order.id, menuItem.item_id, 1, menuItem.price]
-        );
+          // Insert shop contact
+          await connection.query(
+              'INSERT INTO shop_contacts (shop_id, email, contact_number, full_name, payment_method, payment_details, is_primary) VALUES (?, ?, ?, ?, ?, ?, ?)',
+              [shop.id, `contact@${shop.name.toLowerCase().replace(' ', '')}.com`, '03001234567', shop.name, 'jazzcash', '03001234567', 1]
+          );
+
+          // Insert menu items
+          for (const item of shop.menuItems) {
+              await connection.query(
+                  'INSERT INTO menu_items (item_id, shop_id, name, description, price) VALUES (?, ?, ?, ?, ?)',
+                  [item.id, shop.id, item.name, item.description, item.price]
+              );
+          }
       }
-    }
 
-    await connection.commit();
-    console.log('Demo data inserted successfully');
+      // Create sample orders
+      for (const student of demoData.students) {
+          const shop = shopsData[Math.floor(Math.random() * shopsData.length)];
+          const menuItem = shop.menuItems[0]; // Use first menu item for simplicity
+          const quantity = 2;
+          const orderId = uuidv4();
+
+          // Create order
+          await connection.query(
+              'INSERT INTO orders (order_id, user_id, shop_id, total_price, status) VALUES (?, ?, ?, ?, ?)',
+              [orderId, student.id, shop.id, menuItem.price * quantity, 'delivered']
+          );
+
+          // Create order item
+          await connection.query(
+              'INSERT INTO order_items (order_id, item_id, quantity, price) VALUES (?, ?, ?, ?)',
+              [orderId, menuItem.id, quantity, menuItem.price]
+          );
+      }
+
+      await connection.commit();
+      console.log('Demo data inserted successfully!');
+
+      // Demonstrate password verification
+      const [users] = await connection.query('SELECT email, password FROM users LIMIT 1');
+      const user = users[0];
+      const plainPassword = demoData.students[0].password;
+      const isMatch = await verifyPassword(plainPassword, user.password);
+      console.log('\nPassword Verification Demo:');
+      console.log(`Password verification test for ${user.email}:`);
+      console.log(`Plain password: ${plainPassword}`);
+      console.log(`Password match: ${isMatch}`);
+
   } catch (error) {
-    await connection.rollback();
-    console.error('Error inserting demo data:', error);
+      await connection.rollback();
+      console.error('Error inserting demo data:', error);
+      throw error;
   } finally {
-    connection.release();
+      connection.release();
   }
 }
 
-async function main() {
+async function runExampleQueries() {
   try {
-    await createTables();
-    await insertDemoData();
+      // Get all shops with their statistics
+      const [shopStats] = await pool.query('SELECT * FROM shop_statistics');
+      console.log('Shop Statistics:', shopStats);
+
+      // Get all orders for a specific student
+      const [studentOrders] = await pool.query(
+          'SELECT o.*, s.name as shop_name FROM orders o JOIN shops s ON o.shop_id = s.id WHERE o.user_id = ?',
+          [demoData.students[0].id]
+      );
+      console.log('Student Orders:', studentOrders);
+
+      // Get menu items for a specific shop
+      const [shops] = await pool.query('SELECT id FROM shops LIMIT 1');
+      const [menuItems] = await pool.query(
+          'SELECT * FROM menu_items WHERE shop_id = ?',
+          [shops[0].id]
+      );
+      console.log('Menu Items:', menuItems);
+
   } catch (error) {
-    console.error('An error occurred:', error);
-  } finally {
-    await pool.end();
+      console.error('Error running queries:', error);
   }
 }
 
-main();
+async function runDemo() {
+  try {
+      await insertDemoData();
+      await runExampleQueries();
+  } catch (error) {
+      console.error('Demo failed:', error);
+  } finally {
+      await pool.end();
+  }
+}
+
+runDemo();

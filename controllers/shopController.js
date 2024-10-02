@@ -7,7 +7,7 @@ import { generateShopId } from '../utils/generateId.js';
 import { getShopDetailsWithStats, getTopSellingItems, getRecentOrdersWithDetails, getCustomerInsights, getRevenueOverTime, getRevenue} from '../utils/shopUtils.js';
 
 export const createShop = async (req, res) => {
-    const { name, email, description, image_url, phone_number } = req.body;
+    const { name, description, image_url, email, contact_number, full_name, payment_method, payment_details } = req.body;
     const owner_id = req.user.id;
   
     try {
@@ -21,22 +21,42 @@ export const createShop = async (req, res) => {
         return res.status(400).json({ error: 'Shop creation failed', message: 'You can only create one shop per account.' });
       }
       const shopId = generateShopId(name);
-      // If no existing shop, proceed with creation
-      const [result] = await pool.execute(
-        'INSERT INTO shops (id, owner_id, name, email, description, image_url, phone_number) VALUES (?, ?, ?, ?, ?, ?, ?)',
-        [shopId, owner_id, name, email, description, image_url, phone_number]
+      
+      // Start a transaction
+      await pool.execute('START TRANSACTION');
+
+      // Insert into shops table
+      await pool.execute(
+        'INSERT INTO shops (id, owner_id, name, description, image_url) VALUES (?, ?, ?, ?, ?)',
+        [shopId, owner_id, name, description, image_url]
       );
+
+      // Insert into shop_contacts table
+      await pool.execute(
+        'INSERT INTO shop_contacts (shop_id, email, contact_number, full_name, payment_method, payment_details, is_primary) VALUES (?, ?, ?, ?, ?, ?, TRUE)',
+        [shopId, email, contact_number, full_name, payment_method, payment_details]
+      );
+
+      // Commit the transaction
+      await pool.execute('COMMIT');
   
       res.status(201).json({ 
         id: shopId, 
         owner_id, 
         name, 
-        email, 
         description, 
-        image_url, 
-        phone_number 
+        image_url,
+        contact: {
+          email,
+          contact_number,
+          full_name,
+          payment_method,
+          payment_details
+        }
       });
     } catch (error) {
+      // Rollback the transaction in case of error
+      await pool.execute('ROLLBACK');
       console.error('Shop creation error:', error);
       res.status(500).json({ error: 'Failed to create shop', message: error.message });
     }
@@ -44,36 +64,72 @@ export const createShop = async (req, res) => {
 
 export const getShopDetails = async (req, res) => {
     try {
-      const [rows] = await pool.execute(
+      const [shopRows] = await pool.execute(
         'SELECT * FROM shops WHERE id = ? AND owner_id = ?',
         [req.params.shopId, req.user.id]
       );
-      if (rows.length === 0) {
+      if (shopRows.length === 0) {
         return res.status(404).json({ error: 'Shop not found' });
       }
-      res.status(200).json(rows[0]);
+
+      const [contactRows] = await pool.execute(
+        'SELECT * FROM shop_contacts WHERE shop_id = ? AND is_primary = TRUE',
+        [req.params.shopId]
+      );
+
+      const shopDetails = {
+        ...shopRows[0],
+        contact: contactRows[0] || null
+      };
+
+      res.status(200).json(shopDetails);
     } catch (error) {
       res.status(500).json({ error: 'Failed to get shop details', message: error.message });
     }
-  };
+};
 
-  export const updateShop = async (req, res) => {
-    const { name, email, description, image_url, phone_number } = req.body;
+export const updateShop = async (req, res) => {
+    const { name, description, image_url, email, contact_number, full_name, payment_method, payment_details } = req.body;
     try {
-      const [result] = await pool.execute(
-        'UPDATE shops SET name = ?, email = ?, description = ?, image_url = ?, phone_number = ? WHERE id = ? AND owner_id = ?',
-        [name, email, description, image_url, phone_number, req.params.shopId, req.user.id]
+      await pool.execute('START TRANSACTION');
+
+      const [shopResult] = await pool.execute(
+        'UPDATE shops SET name = ?, description = ?, image_url = ? WHERE id = ? AND owner_id = ?',
+        [name, description, image_url, req.params.shopId, req.user.id]
       );
-      if (result.affectedRows === 0) {
+
+      if (shopResult.affectedRows === 0) {
+        await pool.execute('ROLLBACK');
         return res.status(404).json({ error: 'Shop not found' });
       }
-      res.status(200).json({ id: req.params.shopId, name, email, description, image_url, phone_number });
+
+      const [contactResult] = await pool.execute(
+        'UPDATE shop_contacts SET email = ?, contact_number = ?, full_name = ?, payment_method = ?, payment_details = ? WHERE shop_id = ? AND is_primary = TRUE',
+        [email, contact_number, full_name, payment_method, payment_details, req.params.shopId]
+      );
+
+      await pool.execute('COMMIT');
+
+      res.status(200).json({ 
+        id: req.params.shopId, 
+        name, 
+        description, 
+        image_url,
+        contact: {
+          email,
+          contact_number,
+          full_name,
+          payment_method,
+          payment_details
+        }
+      });
     } catch (error) {
+      await pool.execute('ROLLBACK');
       res.status(400).json({ error: 'Failed to update shop', message: error.message });
     }
-  };
+};
 
-  export const ShopDashboard = async (req, res) => {
+export const ShopDashboard = async (req, res) => {
     try {
         const shopId = req.params.shopId;
         const shopDetails = await getShopDetailsWithStats(shopId);
@@ -83,8 +139,17 @@ export const getShopDetails = async (req, res) => {
         const customerInsights = await getCustomerInsights(shopId);
         const revenue = await getRevenue(shopId);
 
+        // Fetch primary contact details
+        const [contactRows] = await pool.execute(
+          'SELECT email, contact_number, full_name, payment_method, payment_details FROM shop_contacts WHERE shop_id = ? AND is_primary = TRUE',
+          [shopId]
+        );
+
         res.json({
-            shopDetails,
+            shopDetails: {
+              ...shopDetails,
+              contact: contactRows[0] || null
+            },
             topSellingItems: topItems,
             recentOrders,
             revenueOverTime,
@@ -96,12 +161,11 @@ export const getShopDetails = async (req, res) => {
     }
 };
 
-  export const getOwnerShops = async (req, res) => {
-    const userId = req.user.id; // Assuming the user ID is available in req.user after authentication
+export const getOwnerShops = async (req, res) => {
+    const userId = req.user.id;
     console.log(userId);
   
     try {
-      // First, check if the user is an owner
       const [ownerCheck] = await pool.execute(
         'SELECT role FROM users WHERE id = ?',
         [userId]
@@ -111,28 +175,36 @@ export const getShopDetails = async (req, res) => {
         return res.status(403).json({ error: 'Access denied', message: 'User is not an owner' });
       }
   
-      // If the user is an owner, fetch all their shops
       const [shops] = await pool.execute(
-        'SELECT id, name FROM shops WHERE owner_id = ?',
+        'SELECT s.id, s.name, sc.email, sc.contact_number FROM shops s LEFT JOIN shop_contacts sc ON s.id = sc.shop_id AND sc.is_primary = TRUE WHERE s.owner_id = ?',
         [userId]
       );
   
       res.status(200).json({ 
         ownerId: userId,
-        shops: shops.map(shop => ({ id: shop.id, name: shop.name }))
+        shops: shops.map(shop => ({ 
+          id: shop.id, 
+          name: shop.name,
+          email: shop.email,
+          contact_number: shop.contact_number
+        }))
       });
   
     } catch (error) {
       console.error('Error fetching owner shops:', error);
       res.status(500).json({ error: 'Failed to fetch shops', message: error.message });
     }
-  };
+};
 
-  export const getAllShops = async (req, res) => {
+export const getAllShops = async (req, res) => {
     try {
-      const [rows] = await pool.execute('SELECT id, name, email, description, image_url, phone_number FROM shops');
+      const [rows] = await pool.execute(`
+        SELECT s.id, s.name, s.description, s.image_url, sc.email, sc.contact_number 
+        FROM shops s
+        LEFT JOIN shop_contacts sc ON s.id = sc.shop_id AND sc.is_primary = TRUE
+      `);
       res.status(200).json(rows);
     } catch (error) {
       res.status(500).json({ error: 'Failed to get shops', message: error.message });
     }
-  }
+};

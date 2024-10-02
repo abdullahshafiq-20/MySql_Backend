@@ -5,6 +5,9 @@ import { getProfile, updateProfile, changePassword } from '../controllers/userCo
 import { createShop, getShopDetails, updateShop, ShopDashboard, getOwnerShops, getAllShops } from '../controllers/shopController.js'
 import {addMenuItem, updateMenuItem, deleteMenuItem, getMenuItem, getAllMenuItems} from '../controllers/menuController.js'
 import { createOrder, getOrderDetails, listUserOrders, updateOrderStatus, listShopOrders } from '../controllers/orderController.js'
+import { getShopPaymentDetails, verifyPaymentAndCreateOrder } from '../controllers/paymentController.js'
+import { imageUpload } from '../controllers/upload.js'
+import upload from '../utils/multer.js'
 const router = express.Router()
 
 
@@ -12,6 +15,10 @@ router.post('/signup', signup)
 router.post('/shop_signup', shop_signup)
 router.post('/verifyOTP', authenticateToken, verifyOTP)
 router.post('/signin', signin)
+
+
+router.post("/imageupload", upload.single("image"), imageUpload)
+
 
 router.get('/profile', authenticateToken, getProfile)
 router.put('/updateProfile', authenticateToken, updateProfile)
@@ -30,6 +37,8 @@ router.get('/shop/:shop_id/getAllMenuItems', getAllMenuItems);
 router.get('/shop/:shop_id/getMenuItem/:item_id', getMenuItem);
 router.get('/getAllShops', getAllShops)
 
+router.get('/shop/:shopId/payment-details', getShopPaymentDetails);
+
 
 
 router.post('/createOrder', authenticateToken, createOrder)
@@ -37,5 +46,7 @@ router.get('/orderDetails/:orderId', authenticateToken, getOrderDetails)
 router.get('/listUserOrders', authenticateToken, listUserOrders)
 router.put('/updateOrderStatus/:orderId', authenticateToken, updateOrderStatus)
 router.get('/listShopOrders', authenticateToken, listShopOrders)
+
+router.post('/verifyPaymentAndCreateOrder', authenticateToken, verifyPaymentAndCreateOrder)
 
 export default router
