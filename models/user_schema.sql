@@ -42,6 +42,7 @@ CREATE TABLE shop_contacts (
     email VARCHAR(255),
     contact_number VARCHAR(20),
     full_name VARCHAR(255),
+    account_title VARCHAR(255),
     payment_method ENUM('jazzcash', 'easypaisa', 'sadapay', 'nayapay') NOT NULL,
     payment_details VARCHAR(255) NOT NULL,
     is_primary BOOLEAN DEFAULT FALSE,
@@ -68,7 +69,8 @@ CREATE TABLE orders (
     user_id VARCHAR(36) NOT NULL,
     shop_id VARCHAR(36) NOT NULL,
     total_price DECIMAL(10, 2) NOT NULL,
-    status ENUM('pending', 'accepted', 'delivered', 'discarded') DEFAULT 'pending',
+    status ENUM('pending', 'preparing', 'accepted', 'rejected', 'delivered', 'discarded') DEFAULT 'pending',
+    payment_status ENUM('pending', 'verified', 'rejected') DEFAULT 'pending',
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
     FOREIGN KEY (user_id) REFERENCES users(id),
@@ -85,6 +87,24 @@ CREATE TABLE order_items (
     FOREIGN KEY (order_id) REFERENCES orders(order_id),
     FOREIGN KEY (item_id) REFERENCES menu_items(item_id)
 );
+
+
+CREATE TABLE payments (
+    payment_id VARCHAR(36) PRIMARY KEY,
+    order_id VARCHAR(36) NOT NULL,
+    user_id VARCHAR(36) NOT NULL,
+    shop_id VARCHAR(36) NOT NULL,
+    amount DECIMAL(10, 2) NOT NULL,
+    payment_method ENUM('jazzcash', 'easypaisa', 'sadapay', 'nayapay') NOT NULL,
+    payment_screenshot_url VARCHAR(255) NOT NULL,
+    gemini_response JSON,
+    verification_status ENUM('pending', 'verified', 'rejected') DEFAULT 'pending',
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+    FOREIGN KEY (order_id) REFERENCES orders(order_id),
+    FOREIGN KEY (user_id) REFERENCES users(id),
+    FOREIGN KEY (shop_id) REFERENCES shops(id)
+    );
 
 
 

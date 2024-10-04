@@ -7,59 +7,68 @@ import { generateShopId } from '../utils/generateId.js';
 import { getShopDetailsWithStats, getTopSellingItems, getRecentOrdersWithDetails, getCustomerInsights, getRevenueOverTime, getRevenue} from '../utils/shopUtils.js';
 
 export const createShop = async (req, res) => {
-    const { name, description, image_url, email, contact_number, full_name, payment_method, payment_details } = req.body;
-    const owner_id = req.user.id;
-  
-    try {
-      // First, check if the owner already has a shop
-      const [existingShops] = await pool.execute(
-        'SELECT * FROM shops WHERE owner_id = ?',
-        [owner_id]
-      );
-  
-      if (existingShops.length > 0) {
-        return res.status(400).json({ error: 'Shop creation failed', message: 'You can only create one shop per account.' });
-      }
-      const shopId = generateShopId(name);
-      
-      // Start a transaction
-      await pool.execute('START TRANSACTION');
+  const { name, description, image_url, email, contact_number, full_name, account_title, payment_method, payment_details } = req.body;
+  const owner_id = req.user.id;
+  let connection;
 
-      // Insert into shops table
-      await pool.execute(
-        'INSERT INTO shops (id, owner_id, name, description, image_url) VALUES (?, ?, ?, ?, ?)',
-        [shopId, owner_id, name, description, image_url]
-      );
+  try {
+    // First, check if the owner already has a shop
+    const [existingShops] = await pool.execute(
+      'SELECT * FROM shops WHERE owner_id = ?',
+      [owner_id]
+    );
 
-      // Insert into shop_contacts table
-      await pool.execute(
-        'INSERT INTO shop_contacts (shop_id, email, contact_number, full_name, payment_method, payment_details, is_primary) VALUES (?, ?, ?, ?, ?, ?, TRUE)',
-        [shopId, email, contact_number, full_name, payment_method, payment_details]
-      );
-
-      // Commit the transaction
-      await pool.execute('COMMIT');
-  
-      res.status(201).json({ 
-        id: shopId, 
-        owner_id, 
-        name, 
-        description, 
-        image_url,
-        contact: {
-          email,
-          contact_number,
-          full_name,
-          payment_method,
-          payment_details
-        }
-      });
-    } catch (error) {
-      // Rollback the transaction in case of error
-      await pool.execute('ROLLBACK');
-      console.error('Shop creation error:', error);
-      res.status(500).json({ error: 'Failed to create shop', message: error.message });
+    if (existingShops.length > 0) {
+      return res.status(400).json({ error: 'Shop creation failed', message: 'You can only create one shop per account.' });
     }
+    const shopId = generateShopId(name);
+    
+    // Start a transaction
+    connection = await pool.getConnection();
+    await connection.beginTransaction();
+
+    // Insert into shops table
+    await connection.execute(
+      'INSERT INTO shops (id, owner_id, name, description, image_url) VALUES (?, ?, ?, ?, ?)',
+      [shopId, owner_id, name, description, image_url]
+    );
+
+    // Insert into shop_contacts table
+    await connection.execute(
+      'INSERT INTO shop_contacts (shop_id, email, contact_number, full_name, account_title, payment_method, payment_details, is_primary) VALUES (?, ?, ?, ?, ?, ?, ?, TRUE)',
+      [shopId, email, contact_number, full_name, account_title, payment_method, payment_details]
+    );
+
+    // Commit the transaction
+    await connection.commit();
+
+    res.status(201).json({ 
+      id: shopId, 
+      owner_id, 
+      name, 
+      description, 
+      image_url,
+      contact: {
+        email,
+        contact_number,
+        full_name,
+        account_title,
+        payment_method,
+        payment_details
+      }
+    });
+  } catch (error) {
+    // Rollback the transaction in case of error
+    if (connection) {
+      await connection.rollback();
+    }
+    console.error('Shop creation error:', error);
+    res.status(500).json({ error: 'Failed to create shop', message: error.message });
+  } finally {
+    if (connection) {
+      connection.release();
+    }
+  }
 };
 
 export const getShopDetails = async (req, res) => {
@@ -91,24 +100,25 @@ export const getShopDetails = async (req, res) => {
 export const updateShop = async (req, res) => {
     const { name, description, image_url, email, contact_number, full_name, payment_method, payment_details } = req.body;
     try {
-      await pool.execute('START TRANSACTION');
+      const connection = await pool.getConnection();
+        await connection.beginTransaction();
 
-      const [shopResult] = await pool.execute(
+      const [shopResult] = await connection.execute(
         'UPDATE shops SET name = ?, description = ?, image_url = ? WHERE id = ? AND owner_id = ?',
         [name, description, image_url, req.params.shopId, req.user.id]
       );
 
       if (shopResult.affectedRows === 0) {
-        await pool.execute('ROLLBACK');
+        await connection.rollback();
         return res.status(404).json({ error: 'Shop not found' });
       }
 
-      const [contactResult] = await pool.execute(
+      const [contactResult] = await connection.execute(
         'UPDATE shop_contacts SET email = ?, contact_number = ?, full_name = ?, payment_method = ?, payment_details = ? WHERE shop_id = ? AND is_primary = TRUE',
         [email, contact_number, full_name, payment_method, payment_details, req.params.shopId]
       );
 
-      await pool.execute('COMMIT');
+      await connection.commit();
 
       res.status(200).json({ 
         id: req.params.shopId, 
@@ -124,7 +134,7 @@ export const updateShop = async (req, res) => {
         }
       });
     } catch (error) {
-      await pool.execute('ROLLBACK');
+      await connection.rollback();
       res.status(400).json({ error: 'Failed to update shop', message: error.message });
     }
 };
@@ -141,7 +151,7 @@ export const ShopDashboard = async (req, res) => {
 
         // Fetch primary contact details
         const [contactRows] = await pool.execute(
-          'SELECT email, contact_number, full_name, payment_method, payment_details FROM shop_contacts WHERE shop_id = ? AND is_primary = TRUE',
+          'SELECT email, contact_number, full_name, account_title, payment_method, payment_details FROM shop_contacts WHERE shop_id = ? AND is_primary = TRUE',
           [shopId]
         );
 
@@ -208,3 +218,4 @@ export const getAllShops = async (req, res) => {
       res.status(500).json({ error: 'Failed to get shops', message: error.message });
     }
 };
+

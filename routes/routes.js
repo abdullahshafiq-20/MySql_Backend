@@ -4,8 +4,8 @@ import {signup, shop_signup, verifyOTP, signin} from '../controllers/auth.js'
 import { getProfile, updateProfile, changePassword } from '../controllers/userController.js'
 import { createShop, getShopDetails, updateShop, ShopDashboard, getOwnerShops, getAllShops } from '../controllers/shopController.js'
 import {addMenuItem, updateMenuItem, deleteMenuItem, getMenuItem, getAllMenuItems} from '../controllers/menuController.js'
-import { createOrder, getOrderDetails, listUserOrders, updateOrderStatus, listShopOrders } from '../controllers/orderController.js'
-import { getShopPaymentDetails, verifyPaymentAndCreateOrder } from '../controllers/paymentController.js'
+import { createOrder, getOrderDetails, listUserOrders, updateOrderStatus, listShopOrders, getPaymentInfo } from '../controllers/orderController.js'
+import { getShopPaymentDetails, verifyPaymentAndCreateOrder, getPaymentDetails, updatePaymentStatus  } from '../controllers/paymentController.js'
 import { imageUpload } from '../controllers/upload.js'
 import upload from '../utils/multer.js'
 const router = express.Router()
@@ -38,6 +38,9 @@ router.get('/shop/:shop_id/getMenuItem/:item_id', getMenuItem);
 router.get('/getAllShops', getAllShops)
 
 router.get('/shop/:shopId/payment-details', getShopPaymentDetails);
+router.get('/paymentDetails/:paymentId', authenticateToken, getPaymentDetails);
+router.put('/updatePaymentStatus/:paymentId', authenticateToken, updatePaymentStatus);
+router.get('/getPaymentId/:orderId', authenticateToken, getPaymentInfo);
 
 
 

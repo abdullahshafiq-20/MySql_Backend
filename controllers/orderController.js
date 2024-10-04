@@ -35,8 +35,8 @@ export const createOrder = async (req, res) => {
 
             // Create the order with the calculated total_price
             await connection.execute(
-                'INSERT INTO orders (order_id, user_id, shop_id, status, total_price) VALUES (?, ?, ?, ?, ?)',
-                [order_id, user_id, shop_id, 'pending', total_price]
+                'INSERT INTO orders (order_id, user_id, shop_id, status, payment_status, total_price) VALUES (?, ?, ?, ?, ?, ?)',
+                [order_id, user_id, shop_id, 'pending', 'pending', total_price]
             );
 
             // Insert order items
@@ -165,7 +165,7 @@ export const updateOrderStatus = async (req, res) => {
     const { status } = req.body;
     const ownerId = req.user.id;
 
-    if (!['pending', 'accepted', 'delivered', 'discarded'].includes(status)) {
+    if (!['pending', 'accepted', 'delivered', 'discarded', 'rejected', 'preparing', 'ready', 'pickedup'].includes(status)) {
         return res.status(400).json({ error: 'Invalid status' });
     }
 
@@ -201,7 +201,7 @@ export const updateOrderStatus = async (req, res) => {
             );
 
             // If the status is changed to "delivered", update the shop's total revenue
-            if (status === 'delivered') {
+            if (status === 'delivered' || status === 'pickedup') {
                 await connection.execute(
                     'UPDATE shops SET total_revenue = total_revenue + ? WHERE id = ?',
                     [order.total_price, order.shop_id]
@@ -321,25 +321,6 @@ export const listShopOrders = async (req, res) => {
 };
 
 
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
   export const getOrderStatus = async (req, res) => {
     try {
       const [rows] = await pool.execute(
@@ -352,6 +333,61 @@ export const listShopOrders = async (req, res) => {
       res.status(200).json(rows[0]);
     } catch (error) {
       res.status(500).json({ error: 'Failed to get order', message: error.message });
+    }
+  };
+
+  export const getPaymentInfo = async (req, res) => {
+    const { orderId } = req.params;
+  
+    try {
+      // Query to get payment information
+      const [paymentRows] = await pool.execute(`
+        SELECT 
+          p.payment_id,
+          p.order_id,
+          p.user_id,
+          p.shop_id,
+          p.amount,
+          p.payment_method,
+          p.payment_screenshot_url,
+          p.verification_status,
+          p.created_at,
+          p.updated_at,
+          o.status AS order_status,
+          o.payment_status AS order_payment_status,
+          o.total_price AS order_total_price
+        FROM 
+          payments p
+        JOIN 
+          orders o ON p.order_id = o.order_id
+        WHERE 
+          p.order_id = ?
+      `, [orderId]);
+  
+      if (paymentRows.length === 0) {
+        return res.status(404).json({ error: 'Payment information not found for this order' });
+      }
+  
+      const paymentInfo = paymentRows[0];
+  
+      // If there's a Gemini response, parse it from JSON
+      if (paymentInfo.gemini_response) {
+        try {
+          paymentInfo.gemini_response = JSON.parse(paymentInfo.gemini_response);
+        } catch (error) {
+          console.error('Error parsing Gemini response:', error);
+          paymentInfo.gemini_response = { error: 'Unable to parse Gemini response' };
+        }
+      }
+  
+      res.status(200).json({
+        message: 'Payment information retrieved successfully',
+        paymentInfo
+      });
+  
+    } catch (error) {
+      console.error('Error retrieving payment information:', error);
+      res.status(500).json({ error: 'An error occurred while retrieving payment information' });
     }
   };
 
