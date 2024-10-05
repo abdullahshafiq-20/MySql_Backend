@@ -3,7 +3,7 @@ import { v4 as uuidv4 } from 'uuid';
 import pool from '../config/database.js';
 import dotenv from 'dotenv';
 import { GoogleGenerativeAI } from "@google/generative-ai";
-import { getApiKey } from '../utils/apiKeyrotation.js';
+import { getApiKey } from '../utils/apiKeyRotation.js';
 
 dotenv.config();
 
