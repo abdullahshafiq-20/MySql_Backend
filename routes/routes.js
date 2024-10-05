@@ -1,4 +1,5 @@
 import express from 'express'
+import passport from 'passport'
 import {authenticateToken} from '../middleware/middleware.js'
 import {signup, shop_signup, verifyOTP, signin} from '../controllers/auth.js'
 import { getProfile, updateProfile, changePassword } from '../controllers/userController.js'
@@ -7,18 +8,23 @@ import {addMenuItem, updateMenuItem, deleteMenuItem, getMenuItem, getAllMenuItem
 import { createOrder, getOrderDetails, listUserOrders, updateOrderStatus, listShopOrders, getPaymentInfo } from '../controllers/orderController.js'
 import { getShopPaymentDetails, verifyPaymentAndCreateOrder, getPaymentDetails, updatePaymentStatus  } from '../controllers/paymentController.js'
 import { imageUpload } from '../controllers/upload.js'
+import { googleCallback, verifyToken } from '../controllers/googleAuthController.js'
 import upload from '../utils/multer.js'
 const router = express.Router()
-
 
 router.post('/signup', signup)
 router.post('/shop_signup', shop_signup)
 router.post('/verifyOTP', authenticateToken, verifyOTP)
 router.post('/signin', signin)
 
-
+// Google Authentication Routes
+router.get('/auth/google', passport.authenticate('google', { scope: ['profile', 'email'] }))
+router.get('/auth/google/callback', 
+  passport.authenticate('google', { failureRedirect: '/signup' }),
+  googleCallback
+)
+router.get('/verifyToken', authenticateToken, verifyToken)
 router.post("/imageupload", upload.single("image"), imageUpload)
-
 
 router.get('/profile', authenticateToken, getProfile)
 router.put('/updateProfile', authenticateToken, updateProfile)
@@ -41,8 +47,6 @@ router.get('/shop/:shopId/payment-details', getShopPaymentDetails);
 router.get('/paymentDetails/:paymentId', authenticateToken, getPaymentDetails);
 router.put('/updatePaymentStatus/:paymentId', authenticateToken, updatePaymentStatus);
 router.get('/getPaymentId/:orderId', authenticateToken, getPaymentInfo);
-
-
 
 router.post('/createOrder', authenticateToken, createOrder)
 router.get('/orderDetails/:orderId', authenticateToken, getOrderDetails)
