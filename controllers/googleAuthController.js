@@ -76,7 +76,7 @@ export const googleAuth = async (accessToken, refreshToken, profile, done) => {
 };
 
 export const googleCallback = (req, res) => {
-  res.redirect(`http://localhost:5173/api/userdashboard?token=${req.user.token}`);
+  res.redirect(`${process.env.FRONTEND_URL}/userdashboard?token=${req.user.token}`);
 };
 
 export const verifyToken = async (req, res) => {
