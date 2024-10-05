@@ -4,7 +4,7 @@ import pool from '../config/database.js';
 import dotenv from 'dotenv';
 import { GoogleGenerativeAI } from "@google/generative-ai";
 import { getApiKey } from '../utils/apiKeyRotation.js';
-
+import {io } from '../app.js';
 dotenv.config();
 
 
@@ -15,6 +15,7 @@ export const verifyPaymentAndCreateOrder = async (req, res) => {
     const user_id = req.user.id;
     const order_id = uuidv4();
     const payment_id = uuidv4();
+    
 
     const connection = await pool.getConnection();
 
