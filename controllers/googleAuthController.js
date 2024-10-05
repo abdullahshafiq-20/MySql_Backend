@@ -1,12 +1,39 @@
 import { v4 as uuidv4 } from 'uuid';
 import pool from '../config/database.js';
 import jwt from 'jsonwebtoken';
+import bcrypt from 'bcrypt';
 
-import bcrypt from 'bcrypt'; // Make sure to import bcrypt
+const validateNUEmail = (email) => {
+  if (!email.endsWith('@nu.edu.pk')) {
+    return { isValid: false, message: 'Only NU email addresses are allowed' };
+  }
+  
+  const localPart = email.split('@')[0];
+  
+  const studentPattern = /^k[0-9]{2}[0-9]{4}$/;
+  if (studentPattern.test(localPart)) {
+    return { isValid: true, role: 'student' };
+  }
+  
+  // Check for teacher email pattern: name.name format
+  const teacherPattern = /^[a-zA-Z]+\.[a-zA-Z]+$/;
+  if (teacherPattern.test(localPart)) {
+    return { isValid: true, role: 'teacher' };
+  }
+  
+  return { isValid: false, message: 'Invalid email format for NU domain' };
+};
 
 export const googleAuth = async (accessToken, refreshToken, profile, done) => {
   try {
-    const [existingUser] = await pool.query('SELECT * FROM users WHERE email = ?', [profile.emails[0].value]);
+    const email = profile.emails[0].value;
+    const emailValidation = validateNUEmail(email);
+    
+    if (!emailValidation.isValid) {
+      return done(new Error(emailValidation.message), null);
+    }
+
+    const [existingUser] = await pool.query('SELECT * FROM users WHERE email = ?', [email]);
 
     if (existingUser.length > 0) {
       // User already exists, update their Google-specific info if needed
@@ -19,20 +46,18 @@ export const googleAuth = async (accessToken, refreshToken, profile, done) => {
     } else {
       // New user, create an account
       const userId = uuidv4();
-      
-      // Generate a secure random password for Google users
-      const randomPassword = uuidv4(); // Using UUID as a secure random password
+      const randomPassword = uuidv4();
       const hashedPassword = await bcrypt.hash(randomPassword, 10);
       
       const newUser = {
         id: userId,
         user_name: profile.displayName,
-        email: profile.emails[0].value,
-        password: hashedPassword, // Store the hashed password
+        email: email,
+        password: hashedPassword,
         imageURL: profile.photos[0].value,
         is_verified: true,
-        role: 'student',
-        auth_type: 'google' // Add this field to indicate the authentication method
+        role: emailValidation.role, // Set role based on email pattern
+        auth_type: 'google'
       };
 
       await pool.query(
@@ -55,20 +80,21 @@ export const googleCallback = (req, res) => {
 };
 
 export const verifyToken = async (req, res) => {
-    try {
-      // req.user should be set by your authenticateToken middleware
-      const user = req.user;
-      
-      // Fetch fresh user data from database
-      const [userData] = await pool.query('SELECT id, user_name, email, role, is_verified, imageURL, auth_type FROM users WHERE id = ?', [user.id]);
-      
-      if (userData.length === 0) {
-        return res.status(401).json({ message: 'User not found' });
-      }
-  
-      res.json({ user: userData[0] });
-    } catch (error) {
-      console.error('Token verification error:', error);
-      res.status(401).json({ message: 'Invalid token' });
+  try {
+    const user = req.user;
+    
+    const [userData] = await pool.query(
+      'SELECT id, user_name, email, role, is_verified, imageURL, auth_type FROM users WHERE id = ?', 
+      [user.id]
+    );
+    
+    if (userData.length === 0) {
+      return res.status(401).json({ message: 'User not found' });
     }
-  };
+
+    res.json({ user: userData[0] });
+  } catch (error) {
+    console.error('Token verification error:', error);
+    res.status(401).json({ message: 'Invalid token' });
+  }
+};

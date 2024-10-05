@@ -90,6 +90,16 @@ export const verifyPaymentAndCreateOrder = async (req, res) => {
 
             await connection.commit();
 
+            io.emit('orderUpdate', {
+                order_id,
+                user_id,
+                shop_id,
+                amount,
+                payment_method,
+                items,
+                gemini_analysis: parsedGeminiResult
+            });
+
             res.status(201).json({
                 status: 'success',
                 message: 'Payment verified and order created successfully',
