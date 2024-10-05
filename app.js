@@ -13,12 +13,12 @@ import { googleAuth } from './controllers/googleAuthController.js';
 
 dotenv.config();
 cloudinaryConfig();
+
 const app = express();
 const httpServer = createServer(app);
 const io = new Server(httpServer, {
   cors: {
-    origin: "*", 
-
+    origin: "*",
     methods: ["GET", "POST", "PUT", "DELETE"]
   }
 });
@@ -27,20 +27,23 @@ app.use(cors({ origin: "*" }));
 app.use(bodyParser.json());
 app.use(bodyParser.urlencoded({ extended: true }));
 
-
+// Configure session middleware with MemoryStore
 app.use(session({
   secret: process.env.SESSION_SECRET || 'your_session_secret',
   resave: false,
-  saveUninitialized: true,
+  saveUninitialized: false,
+  cookie: {
+    secure: process.env.NODE_ENV === 'production',
+    httpOnly: true,
+    maxAge: 1000 * 60 * 60 * 24 // 1 day
+  }
 }));
-
 
 passport.use(new GoogleStrategy({
   clientID: process.env.GOOGLE_CLIENT_ID,
   clientSecret: process.env.GOOGLE_CLIENT_SECRET,
-  callbackURL: "http://localhost:5000/api/auth/google/callback"
+  callbackURL: process.env.GOOGLE_CALLBACK_URL || "http://localhost:5000/api/auth/google/callback"
 }, googleAuth));
-
 
 app.use(passport.initialize());
 app.use(passport.session());
@@ -72,8 +75,6 @@ httpServer.listen(PORT, () => {
 });
 
 app.use('/api', route);
-
-
 
 export { io };
 export default app;
