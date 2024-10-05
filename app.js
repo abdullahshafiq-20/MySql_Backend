@@ -27,6 +27,7 @@ app.use(cors({ origin: "*" }));
 app.use(bodyParser.json());
 app.use(bodyParser.urlencoded({ extended: true }));
 
+
 app.use(session({
   secret: process.env.SESSION_SECRET || 'your_session_secret',
   resave: false,
@@ -73,4 +74,6 @@ httpServer.listen(PORT, () => {
 app.use('/api', route);
 
 
+
 export { io };
+export default app;
