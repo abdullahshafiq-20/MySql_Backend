@@ -23,7 +23,11 @@ const io = new Server(httpServer, {
   }
 });
 
-app.use(cors({ origin: process.env.FRONTEND_URL }));
+// Updated CORS configuration
+app.use(cors({ 
+  origin: process.env.FRONTEND_URL,
+  credentials: true // Important for cookies/sessions
+}));
 app.use(bodyParser.json());
 app.use(bodyParser.urlencoded({ extended: true }));
 
@@ -35,14 +39,15 @@ app.use(session({
   cookie: {
     secure: process.env.NODE_ENV === 'production',
     httpOnly: true,
-    maxAge: 1000 * 60 * 60 * 24 // 1 day
+    maxAge: 1000 * 60 * 60 * 24, // 1 day
+    sameSite: process.env.NODE_ENV === 'production' ? 'none' : 'lax'
   }
 }));
 
 passport.use(new GoogleStrategy({
   clientID: process.env.GOOGLE_CLIENT_ID,
   clientSecret: process.env.GOOGLE_CLIENT_SECRET,
-  callbackURL: process.env.GOOGLE_CALLBACK_URL || `${process.env.BACKEND_URL}/api/auth/google/callback`
+  callbackURL: `${process.env.BACKEND_URL}/api/auth/google/callback`
 }, googleAuth));
 
 app.use(passport.initialize());

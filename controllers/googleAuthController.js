@@ -15,7 +15,6 @@ const validateNUEmail = (email) => {
     return { isValid: true, role: 'student' };
   }
   
-  // Check for teacher email pattern: name.name format
   const teacherPattern = /^[a-zA-Z]+\.[a-zA-Z]+$/;
   if (teacherPattern.test(localPart)) {
     return { isValid: true, role: 'teacher' };
@@ -36,15 +35,17 @@ export const googleAuth = async (accessToken, refreshToken, profile, done) => {
     const [existingUser] = await pool.query('SELECT * FROM users WHERE email = ?', [email]);
 
     if (existingUser.length > 0) {
-      // User already exists, update their Google-specific info if needed
       const user = existingUser[0];
       await pool.query('UPDATE users SET imageURL = ? WHERE id = ?', [profile.photos[0].value, user.id]);
       
-      const token = jwt.sign({ id: user.id, email: user.email, role: user.role }, process.env.JWT_SECRET, { expiresIn: '1d' });
+      const token = jwt.sign(
+        { id: user.id, email: user.email, role: user.role }, 
+        process.env.JWT_SECRET, 
+        { expiresIn: '1d' }
+      );
       
       return done(null, { ...user, token });
     } else {
-      // New user, create an account
       const userId = uuidv4();
       const randomPassword = uuidv4();
       const hashedPassword = await bcrypt.hash(randomPassword, 10);
@@ -56,7 +57,7 @@ export const googleAuth = async (accessToken, refreshToken, profile, done) => {
         password: hashedPassword,
         imageURL: profile.photos[0].value,
         is_verified: true,
-        role: emailValidation.role, // Set role based on email pattern
+        role: emailValidation.role,
         auth_type: 'google'
       };
 
@@ -65,7 +66,11 @@ export const googleAuth = async (accessToken, refreshToken, profile, done) => {
         [newUser.id, newUser.user_name, newUser.email, newUser.password, newUser.imageURL, newUser.is_verified, newUser.role, newUser.auth_type]
       );
 
-      const token = jwt.sign({ id: newUser.id, email: newUser.email, role: newUser.role }, process.env.JWT_SECRET, { expiresIn: '1d' });
+      const token = jwt.sign(
+        { id: newUser.id, email: newUser.email, role: newUser.role }, 
+        process.env.JWT_SECRET, 
+        { expiresIn: '1d' }
+      );
 
       return done(null, { ...newUser, token });
     }
@@ -76,25 +81,27 @@ export const googleAuth = async (accessToken, refreshToken, profile, done) => {
 };
 
 export const googleCallback = (req, res) => {
-  res.redirect(`${process.env.FRONTEND_URL}/userdashboard`);
+  // Send the token in the redirect URL
+  const token = req.user.token;
+  res.redirect(`${process.env.FRONTEND_URL}/auth/callback?token=${token}`);
 };
 
 export const verifyToken = async (req, res) => {
-  try {
-    const user = req.user;
-    
-    const [userData] = await pool.query(
-      'SELECT id, user_name, email, role, is_verified, imageURL, auth_type FROM users WHERE id = ?', 
-      [user.id]
-    );
-    
-    if (userData.length === 0) {
-      return res.status(401).json({ message: 'User not found' });
+    try {
+      const user = req.user;
+      
+      const [userData] = await pool.query(
+        'SELECT id, user_name, email, role, is_verified, imageURL, auth_type FROM users WHERE id = ?', 
+        [user.id]
+      );
+      
+      if (userData.length === 0) {
+        return res.status(401).json({ message: 'User not found' });
+      }
+  
+      res.json({ user: userData[0] });
+    } catch (error) {
+      console.error('Token verification error:', error);
+      res.status(401).json({ message: 'Invalid token' });
     }
-
-    res.json({ user: userData[0] });
-  } catch (error) {
-    console.error('Token verification error:', error);
-    res.status(401).json({ message: 'Invalid token' });
-  }
-};
+  };

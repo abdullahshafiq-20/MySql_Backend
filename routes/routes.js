@@ -18,11 +18,20 @@ router.post('/verifyOTP', authenticateToken, verifyOTP)
 router.post('/signin', signin)
 
 // Google Authentication Routes
-router.get('/auth/google', passport.authenticate('google', { scope: ['profile', 'email'] }))
-router.get('/auth/google/callback', 
-  passport.authenticate('google', { failureRedirect: '/signup' }),
-  googleCallback
-)
+router.get('/auth/google',
+    passport.authenticate('google', { 
+      scope: ['profile', 'email'],
+      prompt: 'select_account' // Forces Google account selection
+    })
+  );
+  
+  router.get('/auth/google/callback',
+    passport.authenticate('google', { 
+      session: false,
+      failureRedirect: `${process.env.FRONTEND_URL}/login?error=google_auth_failed` 
+    }),
+    googleCallback
+  );
 router.get('/verifyToken', authenticateToken, verifyToken)
 router.post("/imageupload", imageUpload);
 
