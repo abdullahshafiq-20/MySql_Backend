@@ -9,7 +9,7 @@ import { createOrder, getOrderDetails, listUserOrders, updateOrderStatus, listSh
 import { getShopPaymentDetails, verifyPaymentAndCreateOrder, getPaymentDetails, updatePaymentStatus  } from '../controllers/paymentController.js'
 import { imageUpload } from '../controllers/upload.js'
 import { googleCallback, verifyToken } from '../controllers/googleAuthController.js'
-import upload from '../utils/multer.js'
+// import upload from '../utils/multer.js'
 const router = express.Router()
 
 router.post('/signup', signup)
@@ -24,7 +24,7 @@ router.get('/auth/google/callback',
   googleCallback
 )
 router.get('/verifyToken', authenticateToken, verifyToken)
-router.post("/imageupload", upload.single("image"), imageUpload)
+router.post("/imageupload", imageUpload);
 
 router.get('/profile', authenticateToken, getProfile)
 router.put('/updateProfile', authenticateToken, updateProfile)

@@ -1,46 +1,48 @@
 import { cloudinaryUploader } from "../utils/cloudinary.js";
-import { Readable } from 'stream';
+import busboy from "busboy";
 
-export const imageUpload = async (request, response) => {
-    try {
-        if (!request.file) {
-            throw new Error('No file uploaded');
-        }
+export const imageUpload = async (req, res) => {
+  if (req.method !== 'POST') {
+    return res.status(405).json({ error: 'Method not allowed' });
+  }
 
-        // Create a stream from the buffer
-        const stream = Readable.from(request.file.buffer);
+  const bb = busboy({ headers: req.headers });
 
-        // Upload to Cloudinary using stream
-        const uploadPromise = new Promise((resolve, reject) => {
-            const uploadStream = cloudinaryUploader.upload_stream(
-                {
-                    folder: 'uploads',
-                    resource_type: 'auto'
-                },
-                (error, result) => {
-                    if (error) reject(error);
-                    else resolve(result);
-                }
-            );
+  bb.on('file', (name, file, info) => {
+    const { filename, encoding, mimeType } = info;
 
-            stream.pipe(uploadStream);
-        });
-
-        const uploadResult = await uploadPromise;
-
-        response.json({
+    const cloudinaryStream = cloudinaryUploader.upload_stream(
+      {
+        folder: "your_folder_name", // Optional: specify a folder in Cloudinary
+        resource_type: "auto" // Automatically detect the file type
+      },
+      (error, result) => {
+        if (error) {
+          console.error('Upload to Cloudinary failed:', error);
+          res.status(500).json({ error: 'Upload to Cloudinary failed' });
+        } else {
+          res.json({
             data: {
-                url: uploadResult.secure_url,
-                name: uploadResult.original_filename,
+              url: result.secure_url,
+              name: result.original_filename,
             },
             status: true,
             message: "Image uploaded successfully!"
-        });
-    } catch (error) {
-        response.status(500).json({
-            data: [],
-            status: false,
-            message: error.message,
-        });
-    }
+          });
+        }
+      }
+    );
+
+    file.pipe(cloudinaryStream);
+  });
+
+  bb.on('error', (error) => {
+    console.error('Error processing form:', error);
+    res.status(500).json({ error: 'Error processing form' });
+  });
+
+  req.pipe(bb);
 };
+
+// Usage in your router:
+// router.post("/imageupload", imageUpload);
