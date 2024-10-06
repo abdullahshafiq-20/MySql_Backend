@@ -120,7 +120,7 @@ export const googleAuth = async (accessToken, refreshToken, profile, done) => {
 
 export const googleCallback = (req, res) => {
     const token = req.user.token;
-    res.redirect(`${process.env.FRONTEND_URL}/auth/callback?token=${token}`);
+    res.redirect(`${process.env.FRONTEND_URL || 'http://localhost:3000' || 'http://localhost:5173'}/auth/callback?token=${token}`);
 };
 
 export const verifyToken = async (req, res) => {
