@@ -15,17 +15,25 @@ dotenv.config();
 cloudinaryConfig();
 
 const app = express();
-const httpServer = createServer(app);
 const io = new Server(httpServer, {
   cors: {
-    origin: process.env.FRONTEND_URL || 'http://localhost:3000' || 'http://localhost:5173',
-    methods: ["GET", "POST", "PUT", "DELETE"]
+    origin: [
+      process.env.FRONTEND_URL,
+      'http://localhost:3000',
+      'http://localhost:5173'
+    ].filter(Boolean),
+    methods: ["GET", "POST", "PUT", "DELETE"],
+    credentials: true
   }
 });
 
 // Updated CORS configuration
 app.use(cors({ 
-  origin: process.env.FRONTEND_URL || 'http://localhost:3000' || 'http://localhost:5173',
+  origin: [
+    process.env.FRONTEND_URL,
+    'http://localhost:3000',
+    'http://localhost:5173'
+  ].filter(Boolean),
   credentials: true // Important for cookies/sessions
 }));
 app.use(bodyParser.json());
