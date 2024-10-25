@@ -96,3 +96,45 @@ export const getAllMenuItems = async (req, res) => {
       res.status(500).json({ error: 'Failed to retrieve menu items', message: error.message });
     }
   };
+
+export const getOverAllMenuItems = async (req, res) => {
+  try {
+    const [rows] = await pool.execute(`
+      SELECT 
+        mi.item_id,
+        mi.name,
+        mi.description,
+        mi.price,
+        s.name AS shop_name,
+        s.id AS shop_id
+      FROM menu_items mi
+      JOIN shops s ON mi.shop_id = s.id
+    `);
+  
+    if (rows.length === 0) {
+      return res.status(200).json({
+        success: true,
+        message: 'No menu items found',
+        items: []
+      });
+    }
+  
+    res.status(200).json({
+      success: true,
+      message: 'Menu items retrieved successfully',
+      items: rows,
+      total: rows.length
+    });
+  
+  } catch (error) {
+    console.error('Error retrieving menu items:', error);
+    
+    // Send a more generic error message to client for security
+    res.status(500).json({
+      success: false,
+      message: 'An error occurred while retrieving menu items',
+      // Only send error details in development
+      ...(process.env.NODE_ENV === 'development' && { error: error.message })
+    });
+  }
+};

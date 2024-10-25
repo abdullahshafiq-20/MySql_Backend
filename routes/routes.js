@@ -4,7 +4,7 @@ import {authenticateToken} from '../middleware/middleware.js'
 import {signup, shop_signup, verifyOTP, signin} from '../controllers/auth.js'
 import { getProfile, updateProfile, changePassword } from '../controllers/userController.js'
 import { createShop, getShopDetails, updateShop, ShopDashboard, getOwnerShops, getAllShops } from '../controllers/shopController.js'
-import {addMenuItem, updateMenuItem, deleteMenuItem, getMenuItem, getAllMenuItems} from '../controllers/menuController.js'
+import {addMenuItem, updateMenuItem, deleteMenuItem, getMenuItem, getAllMenuItems, getOverAllMenuItems} from '../controllers/menuController.js'
 import { createOrder, getOrderDetails, listUserOrders, updateOrderStatus, listShopOrders, getPaymentInfo } from '../controllers/orderController.js'
 import { getShopPaymentDetails, verifyPaymentAndCreateOrder, getPaymentDetails, updatePaymentStatus  } from '../controllers/paymentController.js'
 import { imageUpload } from '../controllers/upload.js'
@@ -51,6 +51,7 @@ router.delete('/shop/:shop_id/deleteMenuItem/:item_id', authenticateToken, delet
 router.get('/shop/:shop_id/getAllMenuItems', getAllMenuItems);
 router.get('/shop/:shop_id/getMenuItem/:item_id', getMenuItem);
 router.get('/getAllShops', getAllShops)
+router.get('/getOverAllMenuItems', getOverAllMenuItems)
 
 router.get('/shop/:shopId/payment-details', getShopPaymentDetails);
 router.get('/paymentDetails/:paymentId', authenticateToken, getPaymentDetails);
