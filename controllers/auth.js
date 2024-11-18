@@ -5,6 +5,17 @@ import nodemailer from 'nodemailer';
 import pool from '../config/database.js';
 import dotenv from 'dotenv';
 
+// Add this helper function at the top
+const expireOldOTPs = async (userId) => {
+    try {
+        await pool.query(
+            'UPDATE otps SET is_used = TRUE WHERE user_id = ? AND expires_at < NOW() AND is_used = FALSE',
+            [userId]
+        );
+    } catch (error) {
+        console.error('Error expiring old OTPs:', error);
+    }
+};
 
 export const signup = async (req, res) => {
     const {user_name, email, password, imageURL} = req.body;
@@ -52,7 +63,15 @@ export const signup = async (req, res) => {
             }
         });
         const otp = Math.floor(100000 + Math.random() * 900000);
-        await pool.query('INSERT INTO otps (user_id, otp) VALUES (?, ?)', [userId, otp]);
+        
+        // First expire any old OTPs
+        await expireOldOTPs(userId);
+        
+        // Then insert new OTP
+        await pool.query(
+            'INSERT INTO otps (user_id, otp) VALUES (?, ?)', 
+            [userId, otp]
+        );
 
         try {
             await transporter.sendMail({
@@ -159,6 +178,65 @@ export const shop_signup = async (req, res) => {
 
 }
 
+// Modify resendOTP function
+export const resendOTP = async (req, res) => {
+    const { email } = req.body;
+
+    try {
+        const [user] = await pool.query('SELECT * FROM users WHERE email = ?', [email]);
+        
+        if (user.length === 0) {
+            return res.status(404).json({ message: 'User not found' });
+        }
+
+        const userId = user[0].id;
+        
+        // First expire old OTPs
+        await expireOldOTPs(userId);
+
+        // Generate and insert new OTP
+        const otp = Math.floor(100000 + Math.random() * 900000);
+        await pool.query(
+            'INSERT INTO otps (user_id, otp) VALUES (?, ?)', 
+            [userId, otp]
+        );
+
+        // Send email
+        const transporter = nodemailer.createTransport({
+            host: 'smtp.gmail.com',
+            port: 587,
+            secure: false,
+            auth: {
+                user: process.env.EMAIL_USER,
+                pass: process.env.EMAIL_PASS
+            },
+            tls: {
+                rejectUnauthorized: false
+            }
+        });
+
+        await transporter.sendMail({
+            from: process.env.EMAIL_USER,
+            to: email,
+            subject: 'New OTP for Email Verification',
+            text: `Your new OTP is ${otp}. This OTP will expire in 5 minutes.`
+        });
+
+        res.status(200).json({
+            message: 'New OTP has been sent to your email',
+            expiresIn: '5 minutes'
+        });
+
+    } catch (error) {
+        console.error('Resend OTP error:', error);
+        res.status(500).json({ 
+            message: 'Error while resending OTP', 
+            error: error.message 
+        });
+    }
+};
+
+// Modify verifyOTP function
 export const verifyOTP = async (req, res) => {
     const { otp } = req.body;
     
@@ -169,25 +247,36 @@ export const verifyOTP = async (req, res) => {
     const userId = req.user.id;
 
     try {
-        const [otpRecord] = await pool.query('SELECT * FROM otps WHERE user_id = ? ORDER BY created_at DESC LIMIT 1', [userId]);
+        // First expire any old OTPs
+        await expireOldOTPs(userId);
+
+        // Then check for valid OTP
+        const [otpRecord] = await pool.query(
+            'SELECT * FROM otps WHERE user_id = ? AND otp = ? AND is_used = FALSE AND expires_at > NOW() ORDER BY created_at DESC LIMIT 1', 
+            [userId, otp]
+        );
 
         if (otpRecord.length === 0) {
-            return res.status(400).json({ message: 'No OTP found for this user' });
+            return res.status(400).json({ 
+                message: 'OTP expired or not found. Please request a new OTP.',
+                expired: true 
+            });
         }
 
-        if (otpRecord[0].otp !== otp) {
-            return res.status(400).json({ message: 'Invalid OTP' });
-        }
+        // Mark OTP as used
+        await pool.query(
+            'UPDATE otps SET is_used = TRUE WHERE id = ?',
+            [otpRecord[0].id]
+        );
 
-        // OTP is valid, update user's verification status
+        // Update user verification status
         await pool.query('UPDATE users SET is_verified = 1 WHERE id = ?', [userId]);
 
-        // Delete the used OTP
-        await pool.query('DELETE FROM otps WHERE user_id = ?', [userId]);
-
-        // Fetch updated user info including role
-        const [updatedUser] = await pool.query('SELECT id, user_name, email, imageURL, is_verified, role FROM users WHERE id = ?', [userId]);
-
+        // Fetch updated user info
+        const [updatedUser] = await pool.query(
+            'SELECT id, user_name, email, imageURL, is_verified, role FROM users WHERE id = ?', 
+            [userId]
+        );
 
         res.status(200).json({
             message: 'Email verified successfully',

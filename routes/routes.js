@@ -1,7 +1,7 @@
 import express from 'express'
 import passport from 'passport'
 import {authenticateToken} from '../middleware/middleware.js'
-import {signup, shop_signup, verifyOTP, signin} from '../controllers/auth.js'
+import {signup, shop_signup, verifyOTP, signin, resendOTP} from '../controllers/auth.js'
 import { getProfile, updateProfile, changePassword } from '../controllers/userController.js'
 import { createShop, getShopDetails, updateShop, ShopDashboard, getOwnerShops, getAllShops } from '../controllers/shopController.js'
 import {addMenuItem, updateMenuItem, deleteMenuItem, getMenuItem, getAllMenuItems, getOverAllMenuItems} from '../controllers/menuController.js'
@@ -16,6 +16,7 @@ router.post('/signup', signup)
 router.post('/shop_signup', shop_signup)
 router.post('/verifyOTP', authenticateToken, verifyOTP)
 router.post('/signin', signin)
+router.post('/resend-otp', resendOTP)
 
 // Google Authentication Routes
 router.get('/auth/google',
