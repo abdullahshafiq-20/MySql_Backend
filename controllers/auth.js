@@ -211,10 +211,10 @@ export const signin = async (req, res) => {
       if (existingUser.length === 0) {
         return res.status(400).json({ message: 'User not found!' });
       }
-      const verified = existingUser[0].is_verified;
-        if (!verified) {
-            return res.status(400).json({ message: 'User not verified!' });
-        }
+    //   const verified = existingUser[0].is_verified;
+    //     if (!verified) {
+    //         return res.status(400).json({ message: 'User not verified!' });
+    //     }
   
       const user = existingUser[0];
   
