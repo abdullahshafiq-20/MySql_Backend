@@ -444,30 +444,125 @@ CFOS is a comprehensive system with the following architecture:
 ## 5. System Features
 
 ### 5.1 Authentication System
-**Priority**: High
+**Priority**: Critical
 
 #### 5.1.1 Description
-A multi-method authentication system supporting both email/password and Google OAuth for secure user access.
+A comprehensive authentication system supporting email/password and Google OAuth, with domain-restricted registration and OTP verification.
 
 #### 5.1.2 Functional Requirements
-- **REQ-1**: Email domain verification to ensure valid user accounts.
-- **REQ-2**: OTP verification for enhanced security during login.
-- **REQ-3**: Google OAuth integration for seamless authentication.
-- **REQ-4**: Session management to maintain user state across sessions.
-- **REQ-5**: Password encryption to protect user credentials.
+- **REQ-1**: Email domain verification (nu.edu.pk only)
+- **REQ-2**: OTP verification via email
+- **REQ-3**: Google OAuth integration
+- **REQ-4**: JWT-based session management
+- **REQ-5**: Password encryption and validation
+- **REQ-6**: Role-based access control (student, teacher, shop_owner)
+- **REQ-7**: Account verification status tracking
 
 ### 5.2 Order Management
-**Priority**: High
+**Priority**: Critical
 
 #### 5.2.1 Description
-A comprehensive order processing system that provides real-time updates and efficient handling of customer requests.
+Real-time order processing system with status tracking and notifications.
 
 #### 5.2.2 Functional Requirements
-- **REQ-6**: Order creation and tracking for user convenience.
-- **REQ-7**: Real-time status updates to keep users informed.
-- **REQ-8**: Payment processing for secure transactions.
-- **REQ-9**: Order history for user reference and tracking.
-- **REQ-10**: Notification system to alert users of order status changes.
+- **REQ-8**: Order creation and validation
+- **REQ-9**: Real-time status updates via WebSocket
+- **REQ-10**: Order history tracking
+- **REQ-11**: Multiple item support per order
+- **REQ-12**: Order cancellation within time limit
+- **REQ-13**: Status change notifications
+- **REQ-14**: Price calculation and validation
+
+### 5.3 Payment System
+**Priority**: Critical
+
+#### 5.3.1 Description
+AI-powered payment verification system using screenshot analysis and multiple payment methods.
+
+#### 5.3.2 Functional Requirements
+- **REQ-15**: Payment screenshot upload and storage
+- **REQ-16**: Gemini AI integration for verification
+- **REQ-17**: Multiple payment method support
+  - JazzCash
+  - EasyPaisa
+  - SadaPay
+  - NayaPay
+- **REQ-18**: Payment status tracking
+- **REQ-19**: Automated verification process
+- **REQ-20**: Manual verification fallback
+
+### 5.4 Shop Management
+**Priority**: High
+
+#### 5.4.1 Description
+Comprehensive shop management system for vendors with menu and order control.
+
+#### 5.4.2 Functional Requirements
+- **REQ-21**: Shop profile creation and management
+- **REQ-22**: Menu item CRUD operations
+- **REQ-23**: Order processing controls
+- **REQ-24**: Revenue tracking and analytics
+- **REQ-25**: Shop statistics dashboard
+- **REQ-26**: Contact information management
+- **REQ-27**: Payment method configuration
+
+### 5.5 Analytics and Reporting
+**Priority**: Medium
+
+#### 5.5.1 Description
+Data-driven insights and reporting system for business intelligence.
+
+#### 5.5.2 Functional Requirements
+- **REQ-28**: Sales analytics and trends
+- **REQ-29**: Popular items tracking
+- **REQ-30**: Customer order patterns
+- **REQ-31**: Revenue analysis
+  - Daily revenue
+  - Monthly trends
+  - Payment method distribution
+- **REQ-32**: Performance metrics
+- **REQ-33**: Custom report generation
+
+### 5.6 Real-time Notification System
+**Priority**: High
+
+#### 5.6.1 Description
+Multi-channel notification system for order and payment updates.
+
+#### 5.6.2 Functional Requirements
+- **REQ-34**: WebSocket real-time updates
+- **REQ-35**: Email notifications
+- **REQ-36**: Order status notifications
+- **REQ-37**: Payment verification alerts
+- **REQ-38**: System alerts and warnings
+- **REQ-39**: Notification preferences
+
+### 5.7 User Management
+**Priority**: High
+
+#### 5.7.1 Description
+User profile and preference management system with role-based features.
+
+#### 5.7.2 Functional Requirements
+- **REQ-40**: Profile management
+- **REQ-41**: Role-based access control
+- **REQ-42**: Alert count tracking
+- **REQ-43**: Order history access
+- **REQ-44**: Payment history tracking
+- **REQ-45**: Account verification status
+
+### 5.8 Image Management
+**Priority**: Medium
+
+#### 5.8.1 Description
+Cloud-based image storage and processing system for menu items and payments.
+
+#### 5.8.2 Functional Requirements
+- **REQ-46**: Cloudinary integration
+- **REQ-47**: Image upload and storage
+- **REQ-48**: Image optimization
+- **REQ-49**: Payment screenshot processing
+- **REQ-50**: Menu item image management
 
 ## 6. Other Nonfunctional Requirements
 

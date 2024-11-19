@@ -20,45 +20,79 @@ const getTopSellingItems = async (shopId, limit = 5, metric = 'quantity') => {
             return { error: 'Shop not found', items: [] };
         }
 
-        // Then, check if the shop has any menu items
-        const [menuItemRows] = await pool.execute('SELECT item_id FROM menu_items WHERE shop_id = ? LIMIT 1', [shopId]);
-        if (menuItemRows.length === 0) {
-            return { message: 'No menu items found for this shop', items: [] };
-        }
+        // Add this debug query at the start of getTopSellingItems
+        const [orderItemsCheck] = await pool.execute(`
+            SELECT oi.item_id, oi.quantity, o.status, p.verification_status
+            FROM order_items oi
+            JOIN orders o ON oi.order_id = o.order_id
+            JOIN payments p ON o.order_id = p.order_id
+            WHERE o.shop_id = ?
+        `, [shopId]);
 
-        // Determine the sorting metric
-        let sortMetric, metricName;
-        if (metric === 'revenue') {
-            sortMetric = 'total_revenue';
-            metricName = 'Total Revenue';
-        } else {
-            sortMetric = 'total_quantity_sold';
-            metricName = 'Total Quantity Sold';
-        }
+        console.log('Debug - Order Items Check:', orderItemsCheck);
 
-        // Now, get the top selling items
-        const [rows] = await pool.execute(`
+        // Get all sales data with item details - using INNER JOINs for actual sales
+        const [salesData] = await pool.execute(`
             SELECT 
                 mi.item_id, 
                 mi.name, 
-                COALESCE(SUM(oi.quantity), 0) as total_quantity_sold,
-                COALESCE(SUM(oi.quantity * oi.price), 0) as total_revenue
+                mi.price as unit_price,
+                SUM(oi.quantity) as total_quantity_sold
             FROM menu_items mi
-            LEFT JOIN order_items oi ON mi.item_id = oi.item_id
-            LEFT JOIN orders o ON oi.order_id = o.order_id
-            WHERE mi.shop_id = ? AND (o.status = 'delivered' OR o.status IS NULL)
-            GROUP BY mi.item_id, mi.name
-            ORDER BY ${sortMetric} DESC
+            INNER JOIN order_items oi ON mi.item_id = oi.item_id
+            INNER JOIN orders o ON oi.order_id = o.order_id
+            INNER JOIN payments p ON o.order_id = p.order_id
+            WHERE mi.shop_id = ?
+            AND o.status = 'delivered'
+            AND p.verification_status = 'verified'
+            GROUP BY mi.item_id, mi.name, mi.price
+            ORDER BY total_quantity_sold DESC
             LIMIT ?
         `, [shopId, limit.toString()]);
 
-        if (rows.length === 0) {
-            return { message: 'No sales data available for this shop', items: [] };
+        // If no sales data, get menu items with zero sales
+        if (salesData.length === 0) {
+            const [menuItems] = await pool.execute(`
+                SELECT 
+                    item_id,
+                    name,
+                    price as unit_price,
+                    0 as total_quantity_sold
+                FROM menu_items
+                WHERE shop_id = ?
+                LIMIT ?
+            `, [shopId, limit.toString()]);
+
+            console.log('\n=== Top Selling Items Report ===');
+            console.log('No sales data available yet.');
+            console.log('Available menu items:');
+            menuItems.forEach(item => {
+                console.log(`Item: ${item.name}`);
+                console.log(`Unit Price: $${item.unit_price}`);
+                console.log('------------------------');
+            });
+            console.log('==============================\n');
+
+            return { 
+                items: menuItems,
+                metric: metric === 'revenue' ? 'Total Revenue' : 'Total Quantity Sold'
+            };
         }
 
+        // Log detailed sales information
+        console.log('\n=== Top Selling Items Report ===');
+        salesData.forEach(item => {
+            console.log(`Item: ${item.name}`);
+            console.log(`Total Quantity Sold: ${item.total_quantity_sold}`);
+            console.log(`Unit Price: $${item.unit_price}`);
+            console.log(`Total Revenue: $${item.total_quantity_sold * item.unit_price}`);
+            console.log('------------------------');
+        });
+        console.log('==============================\n');
+
         return { 
-            items: rows,
-            metric: metricName
+            items: salesData,
+            metric: metric === 'revenue' ? 'Total Revenue' : 'Total Quantity Sold'
         };
     } catch (error) {
         console.error('Error in getTopSellingItems:', error);
@@ -101,9 +135,15 @@ const getRevenueOverTime = async (shopId, period = 'last_30_days') => {
     }
 
     const [rows] = await pool.execute(`
-        SELECT DATE(o.created_at) as date, SUM(o.total_price) as daily_revenue
+        SELECT 
+            DATE(o.created_at) as date, 
+            SUM(o.total_price) as daily_revenue
         FROM orders o
-        WHERE o.shop_id = ? AND o.status = 'delivered' ${dateFilter}
+        JOIN payments p ON o.order_id = p.order_id
+        WHERE o.shop_id = ? 
+        AND o.status = 'delivered' 
+        AND p.verification_status = 'verified'
+        ${dateFilter}
         GROUP BY DATE(o.created_at)
         ORDER BY date
     `, [shopId]);
@@ -121,7 +161,10 @@ const getCustomerInsights = async (shopId) => {
             MAX(o.created_at) as last_order_date
         FROM users u
         JOIN orders o ON u.id = o.user_id
-        WHERE o.shop_id = ? AND o.status = 'delivered'
+        JOIN payments p ON o.order_id = p.order_id
+        WHERE o.shop_id = ? 
+        AND o.status = 'delivered'
+        AND p.verification_status = 'verified'
         GROUP BY u.id, u.user_name
         ORDER BY total_spent DESC
         LIMIT 10
@@ -132,10 +175,82 @@ const getCustomerInsights = async (shopId) => {
 
 const getRevenue = async (shopId) => {
     const [rows] = await pool.execute(`
-        SELECT total_revenue from shops WHERE id = ?
+        SELECT COALESCE(SUM(o.total_price), 0) as total_revenue
+        FROM orders o
+        JOIN payments p ON o.order_id = p.order_id
+        WHERE o.shop_id = ? 
+        AND o.status = 'delivered'
+        AND p.verification_status = 'verified'
     `, [shopId]);
 
     return rows[0].total_revenue;
 }
-  
-  export { getShopDetailsWithStats, getTopSellingItems, getRecentOrdersWithDetails, getRevenueOverTime, getCustomerInsights, getRevenue };
+
+// Update the debugItemSales function to be more comprehensive
+const debugItemSales = async (shopId) => {
+    let orders = [], orderItems = [], payments = [], menuItems = [];
+    try {
+        // 1. Check menu items
+        [menuItems] = await pool.execute(`
+            SELECT item_id, name, price 
+            FROM menu_items 
+            WHERE shop_id = ?
+        `, [shopId]);
+        console.log('1. Available menu items:', menuItems);
+
+        // 2. Check orders for this shop
+        [orders] = await pool.execute(`
+            SELECT o.order_id, o.status, o.created_at
+            FROM orders o
+            WHERE o.shop_id = ?
+        `, [shopId]);
+        console.log('2. Orders for shop:', orders);
+
+        // 3. Check order items (modified query to debug)
+        [orderItems] = await pool.execute(`
+            SELECT oi.*, o.shop_id
+            FROM order_items oi
+            JOIN orders o ON oi.order_id = o.order_id
+            WHERE o.shop_id = ?
+        `, [shopId]);
+        console.log('3. Order items:', orderItems);
+
+        // 4. Check payments
+        [payments] = await pool.execute(`
+            SELECT p.payment_id, p.order_id, p.verification_status
+            FROM payments p
+            WHERE p.shop_id = ?
+        `, [shopId]);
+        console.log('4. Payments:', payments);
+
+        // Additional debug query to check order_items table directly
+        const [directOrderItems] = await pool.execute(`
+            SELECT * FROM order_items WHERE order_id IN (
+                SELECT order_id FROM orders WHERE shop_id = ?
+            )
+        `, [shopId]);
+        console.log('5. Direct order items check:', directOrderItems);
+
+        return {
+            menuItemsCount: menuItems.length,
+            ordersCount: orders.length,
+            orderItemsCount: orderItems.length,
+            paymentsCount: payments.length,
+            orderIds: orders.map(o => o.order_id),
+            directOrderItemsCount: directOrderItems.length
+        };
+    } catch (error) {
+        console.error('Error in debugItemSales:', error);
+        throw error;
+    }
+};
+
+export { 
+    getShopDetailsWithStats, 
+    getTopSellingItems, 
+    getRecentOrdersWithDetails, 
+    getRevenueOverTime, 
+    getCustomerInsights, 
+    getRevenue,
+    debugItemSales  // Export the debug function
+};

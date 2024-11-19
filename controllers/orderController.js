@@ -4,10 +4,36 @@ import  {generateOrderId}  from '../utils/generateId.js';
 import { checkShopOwnership, incrementAlertCount } from '../utils/orderUtils.js';
 
 export const createOrder = async (req, res) => {
+    console.log('Full request body:', req.body); // Debug log
     const { shop_id, items } = req.body;
+    console.log('Extracted shop_id:', shop_id); // Debug log
+    console.log('Extracted items:', items); // Debug log
+    
     const user_role = req.user.role;
     const user_id = req.user.id;
     const order_id = generateOrderId();
+
+    // Validate items array
+    if (!items || !Array.isArray(items) || items.length === 0) {
+        return res.status(400).json({ 
+            error: 'Invalid order items', 
+            message: 'Order must contain at least one item',
+            receivedItems: items // Include what was received
+        });
+    }
+
+    // Validate each item in the array
+    for (const item of items) {
+        if (!item.item_id || !item.quantity) {
+            return res.status(400).json({
+                error: 'Invalid item format',
+                message: 'Each item must have item_id and quantity',
+                invalidItem: item
+            });
+        }
+    }
+
+    console.log('Creating order with items:', items); // Debug log
 
     if (user_role !== 'student' && user_role !== 'teacher') {
         return res.status(403).json({ error: 'Only students and teachers can place orders' });
@@ -20,9 +46,16 @@ export const createOrder = async (req, res) => {
         try {
             // Calculate total price before creating the order
             let total_price = 0;
+            const itemDetails = []; // Store item details for logging
+
             for (const item of items) {
+                // Validate item structure
+                if (!item.item_id || !item.quantity) {
+                    throw new Error(`Invalid item format: ${JSON.stringify(item)}`);
+                }
+
                 const [menuItemResult] = await connection.execute(
-                    'SELECT price FROM menu_items WHERE item_id = ? AND shop_id = ?',
+                    'SELECT price, name FROM menu_items WHERE item_id = ? AND shop_id = ?',
                     [item.item_id, shop_id]
                 );
 
@@ -30,29 +63,55 @@ export const createOrder = async (req, res) => {
                     throw new Error(`Menu item ${item.item_id} not found or does not belong to the shop`);
                 }
 
-                total_price += menuItemResult[0].price * item.quantity;
+                const unit_price = menuItemResult[0].price;
+                const item_total_price = unit_price * item.quantity;
+                total_price += item_total_price;
+
+                itemDetails.push({
+                    item_id: item.item_id,
+                    name: menuItemResult[0].name,
+                    quantity: item.quantity,
+                    unit_price: unit_price,
+                    total_price: item_total_price
+                });
             }
 
-            // Create the order with the calculated total_price
+            console.log('Item details before insertion:', itemDetails); // Debug log
+
+            // Create the order
             await connection.execute(
                 'INSERT INTO orders (order_id, user_id, shop_id, status, payment_status, total_price) VALUES (?, ?, ?, ?, ?, ?)',
                 [order_id, user_id, shop_id, 'pending', 'pending', total_price]
             );
 
-            // Insert order items
-            for (const item of items) {
-                const [menuItemResult] = await connection.execute(
-                    'SELECT price FROM menu_items WHERE item_id = ? AND shop_id = ?',
-                    [item.item_id, shop_id]
-                );
-
-                const item_price = menuItemResult[0].price * item.quantity;
-
+            // Insert order items with total price for each item
+            for (const item of itemDetails) {
+                console.log('Inserting item:', item); // Debug log
+                
                 await connection.execute(
                     'INSERT INTO order_items (order_id, item_id, quantity, price) VALUES (?, ?, ?, ?)',
-                    [order_id, item.item_id, item.quantity, item_price]
+                    [order_id, item.item_id, item.quantity, item.total_price] // Use total_price instead of unit_price
                 );
             }
+
+            // Verify the insertion
+            const [verifyOrderItems] = await connection.execute(`
+                SELECT 
+                    oi.*,
+                    mi.name as item_name,
+                    mi.price as unit_price,
+                    (oi.quantity * mi.price) as expected_total
+                FROM order_items oi
+                JOIN menu_items mi ON oi.item_id = mi.item_id
+                WHERE oi.order_id = ?
+            `, [order_id]);
+
+            console.log('Order Items Verification:', {
+                orderItems: verifyOrderItems,
+                totalOrderPrice: total_price,
+                calculatedTotal: verifyOrderItems.reduce((sum, item) => sum + item.price, 0)
+            });
+
             await connection.commit();
 
             const [orderDetails] = await connection.execute(
@@ -82,18 +141,27 @@ export const createOrder = async (req, res) => {
                 message: 'Order created successfully',
                 order_id,
                 total_price,
-                user_role,
-                fullOrderDetails
+                items: itemDetails,
+                verifiedItems: verifyOrderItems
             });
         } catch (error) {
+            console.error('Transaction error:', error);
             await connection.rollback();
             throw error;
         } finally {
             connection.release();
         }
     } catch (error) {
-        console.error('Order creation error:', error);
-        res.status(500).json({ error: 'Failed to create order', message: error.message });
+        console.error('Order creation error:', {
+            error: error.message,
+            stack: error.stack,
+            requestBody: req.body
+        });
+        res.status(500).json({ 
+            error: 'Failed to create order', 
+            message: error.message,
+            details: 'Check server logs for more information'
+        });
     }
 };
 
@@ -194,6 +262,24 @@ export const updateOrderStatus = async (req, res) => {
                 return res.status(403).json({ error: 'You are not authorized to update this order' });
             }
 
+            // If status is being set to 'rejected', delete the order items first
+            if (status === 'rejected') {
+                // First, get the order items for logging
+                const [orderItems] = await connection.execute(
+                    'SELECT * FROM order_items WHERE order_id = ?',
+                    [orderId]
+                );
+                console.log('Removing order items for rejected order:', orderItems);
+
+                // Delete the order items
+                await connection.execute(
+                    'DELETE FROM order_items WHERE order_id = ?',
+                    [orderId]
+                );
+
+                console.log('Order items removed for order:', orderId);
+            }
+
             // Update the order status
             await connection.execute(
                 'UPDATE orders SET status = ? WHERE order_id = ?',
@@ -223,13 +309,17 @@ export const updateOrderStatus = async (req, res) => {
                 [orderId]
             );
 
-            const [orderItems] = await connection.execute(
-                `SELECT oi.*, mi.name as item_name, mi.price
-                 FROM order_items oi
-                 JOIN menu_items mi ON oi.item_id = mi.item_id
-                 WHERE oi.order_id = ?`,
-                [orderId]
-            );
+            // Only fetch order items if the order wasn't rejected
+            let orderItems = [];
+            if (status !== 'rejected') {
+                [orderItems] = await connection.execute(
+                    `SELECT oi.*, mi.name as item_name, mi.price
+                     FROM order_items oi
+                     JOIN menu_items mi ON oi.item_id = mi.item_id
+                     WHERE oi.order_id = ?`,
+                    [orderId]
+                );
+            }
 
             const fullUpdatedOrder = {
                 ...updatedOrderRows[0],
@@ -242,7 +332,8 @@ export const updateOrderStatus = async (req, res) => {
                 message: 'Order status updated successfully',
                 orderId,
                 newStatus: status,
-                fullUpdatedOrder
+                fullUpdatedOrder,
+                itemsRemoved: status === 'rejected'
             });
         } catch (error) {
             await connection.rollback();

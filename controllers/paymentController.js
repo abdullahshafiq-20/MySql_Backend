@@ -27,14 +27,50 @@ export const verifyPaymentAndCreateOrder = async (req, res) => {
             throw new Error('Missing required fields');
         }
 
-        // 2. Create order first
+        // Calculate total price and prepare item details
+        let total_price = 0;
+        const itemDetails = [];
+
+        // Verify items and calculate total price
+        for (const item of items) {
+            const [menuItemResult] = await connection.execute(
+                'SELECT price, name FROM menu_items WHERE item_id = ? AND shop_id = ?',
+                [item.item_id, shop_id]
+            );
+
+            if (menuItemResult.length === 0) {
+                throw new Error(`Menu item ${item.item_id} not found or does not belong to the shop`);
+            }
+
+            const unit_price = menuItemResult[0].price;
+            const item_total_price = unit_price * item.quantity;
+            total_price += item_total_price;
+
+            itemDetails.push({
+                item_id: item.item_id,
+                name: menuItemResult[0].name,
+                quantity: item.quantity,
+                unit_price: unit_price,
+                total_price: item_total_price
+            });
+        }
+
+        // 2. Create order
         await connection.execute(
             `INSERT INTO orders (
                 order_id, user_id, shop_id, 
                 total_price, status, payment_status
             ) VALUES (?, ?, ?, ?, ?, ?)`,
-            [order_id, user_id, shop_id, amount, 'pending', 'pending']
+            [order_id, user_id, shop_id, total_price, 'pending', 'pending']
         );
+
+        // Insert order items
+        for (const item of itemDetails) {
+            await connection.execute(
+                'INSERT INTO order_items (order_id, item_id, quantity, price) VALUES (?, ?, ?, ?)',
+                [order_id, item.item_id, item.quantity, item.total_price]
+            );
+        }
 
         // 3. Create payment record
         await connection.execute(
@@ -46,6 +82,16 @@ export const verifyPaymentAndCreateOrder = async (req, res) => {
             [payment_id, order_id, user_id, shop_id, amount, payment_method, 
              payment_screenshot_url, 'pending']
         );
+
+        // Verify the order items insertion
+        const [verifyOrderItems] = await connection.execute(`
+            SELECT oi.*, mi.name as item_name
+            FROM order_items oi
+            JOIN menu_items mi ON oi.item_id = mi.item_id
+            WHERE oi.order_id = ?
+        `, [order_id]);
+
+        console.log('Verified order items:', verifyOrderItems);
 
         // 4. Use Gemini API to analyze the payment screenshot
         let geminiResult;
@@ -97,7 +143,7 @@ export const verifyPaymentAndCreateOrder = async (req, res) => {
                 shop_id,
                 amount,
                 payment_method,
-                items,
+                items: verifyOrderItems,
                 gemini_analysis: parsedGeminiResult
             });
 
@@ -110,18 +156,14 @@ export const verifyPaymentAndCreateOrder = async (req, res) => {
                     shop_id,
                     amount,
                     payment_method,
-                    items,
+                    items: verifyOrderItems,
                     gemini_analysis: parsedGeminiResult
                 }
             });
 
         } catch (geminiError) {
             console.error('Gemini API Error:', geminiError);
-            await connection.execute(
-                'UPDATE payments SET verification_status = ? WHERE payment_id = ?',
-                ['rejected', payment_id]
-            );
-            
+            await connection.rollback();
             throw new Error('Failed to process payment screenshot: ' + geminiError.message);
         }
 
