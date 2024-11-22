@@ -187,7 +187,7 @@ const analyzePaymentScreenshot = async (imageUrl) => {
         const genAI = new GoogleGenerativeAI(apiKey);
 
         // Set up the model
-        const model = genAI.getGenerativeModel({ model: "gemini-1.5-flash" });
+        const model = genAI.getGenerativeModel({ model: "gemini-1.5-pro" });
 
         // Fetch the image data from the URL
         const response = await fetch(imageUrl);
