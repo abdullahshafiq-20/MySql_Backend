@@ -127,7 +127,8 @@ export const googleCallback = (req, res) => {
       || 'http://localhost:5173';
 
   // Construct the full redirect URL
-  const redirectUrl = `${frontendUrl}/auth/callback?token=${encodeURIComponent(token)}`;
+//   const redirectUrl = `${frontendUrl}/auth/callback?token=${encodeURIComponent(token)}`;
+  const redirectUrl = `https://campick-nuces.netlify.app/auth/callback?token=${encodeURIComponent(token)}`;
   
   res.redirect(redirectUrl);
 };
