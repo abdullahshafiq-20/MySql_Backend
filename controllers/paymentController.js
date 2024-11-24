@@ -13,6 +13,7 @@ dotenv.config();
 export const verifyPaymentAndCreateOrder = async (req, res) => {
     const { payment_screenshot_url, shop_id, amount, payment_method, items } = req.body;
     const user_id = req.user.id;
+    const user_role = req.user.role;
     const order_id = uuidv4();
     const payment_id = uuidv4();
     
@@ -25,6 +26,23 @@ export const verifyPaymentAndCreateOrder = async (req, res) => {
         // 1. Validate input
         if (!payment_screenshot_url || !shop_id || !amount || !payment_method || !items || !items.length) {
             throw new Error('Missing required fields');
+        }
+
+        // Check user's alert_count if they are a student
+        if (user_role === 'student') {
+            const [userResult] = await connection.execute(
+                'SELECT alert_count FROM users WHERE id = ?',
+                [user_id]
+            );
+
+            if (userResult[0].alert_count >= 3) {
+                await connection.rollback();
+                return res.status(403).json({ 
+                    status: 'error',
+                    error: 'Order creation blocked', 
+                    message: 'You have accumulated too many alerts. Please contact administration.'
+                });
+            }
         }
 
         // Calculate total price and prepare item details

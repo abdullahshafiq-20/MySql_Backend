@@ -71,6 +71,11 @@ export const googleAuth = async (accessToken, refreshToken, profile, done) => {
 
         if (existingUser.length > 0) {
             const user = existingUser[0];
+            
+            if (user.role === 'student' && user.alert_count >= 3) {
+                return done(new Error('Your account has been restricted due to multiple alerts. Please contact administration.'), null);
+            }
+            
             await pool.query('UPDATE users SET imageURL = ? WHERE id = ?', [profile.photos[0].value, user.id]);
             
             const token = jwt.sign(

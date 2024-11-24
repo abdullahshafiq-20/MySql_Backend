@@ -44,6 +44,22 @@ export const createOrder = async (req, res) => {
         await connection.beginTransaction();
 
         try {
+            // Check user's alert_count if they are a student
+            if (user_role === 'student') {
+                const [userResult] = await connection.execute(
+                    'SELECT alert_count FROM users WHERE id = ?',
+                    [user_id]
+                );
+
+                if (userResult[0].alert_count >= 3) {
+                    await connection.rollback();
+                    return res.status(403).json({ 
+                        error: 'Order creation blocked', 
+                        message: 'You have accumulated too many alerts. Please contact administration.'
+                    });
+                }
+            }
+
             // Calculate total price before creating the order
             let total_price = 0;
             const itemDetails = []; // Store item details for logging
