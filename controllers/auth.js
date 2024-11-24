@@ -305,7 +305,7 @@ export const signin = async (req, res) => {
     //         return res.status(400).json({ message: 'User not verified!' });
     //     }
   
-        const user = existingUser[0];
+      const user = existingUser[0];
   
         // Check alert count if user is a student
         if (user.role === 'student' && user.alert_count >= 3) {
@@ -328,14 +328,14 @@ export const signin = async (req, res) => {
         { expiresIn: '1d' } // Token expires in 1 hour
       );
   
-        res.status(201).json({
-            user_info: user,
-            token,
-            message: 'Welcome back!',
-        });
+      res.status(201).json({
+        user_info: user,
+        token,
+        message: 'Welcome back!',
+      });
     } catch (error) {
-        console.log(error);
-        res.status(500).json({ message: 'Something went wrong' });
+      console.log(error);
+      res.status(500).json({ message: 'Something went wrong' });
     }
-};
+  };
   
