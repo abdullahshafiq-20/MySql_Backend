@@ -3,6 +3,7 @@ import pool from '../config/database.js';
 import jwt from 'jsonwebtoken';
 import bcrypt from 'bcrypt';
 import nodemailer from 'nodemailer';
+import { generatePasswordEmailTemplate } from '../utils/emailTemplate.js';
 
 const transporter = nodemailer.createTransport({
     host: 'smtp.gmail.com',
@@ -43,13 +44,7 @@ const sendPasswordEmail = async (email, password) => {
             from: process.env.EMAIL_USER,
             to: email,
             subject: 'Your Account Password',
-            html: `
-                <h2>Welcome to Our Platform!</h2>
-                <p>Your account has been created successfully using Google Sign-In.</p>
-                <p>Here is your generated password: <strong>${password}</strong></p>
-                <p>Please change this password after your first login for security purposes.</p>
-                <p>Note: This password is only needed if you choose to login without Google in the future.</p>
-            `
+            html: generatePasswordEmailTemplate(password, email)
         });
         console.log('Password email sent successfully');
     } catch (error) {

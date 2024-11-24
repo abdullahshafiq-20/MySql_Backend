@@ -4,6 +4,7 @@ import { v4 as uuidv4 } from 'uuid';
 import nodemailer from 'nodemailer';
 import pool from '../config/database.js';
 import dotenv from 'dotenv';
+import { generateVerificationEmailTemplate } from '../utils/emailTemplate.js';
 
 // Add this helper function at the top
 const expireOldOTPs = async (userId) => {
@@ -78,7 +79,7 @@ export const signup = async (req, res) => {
                 from: process.env.EMAIL_USER,
                 to: email,
                 subject: 'Email Verification',
-                text: `Your OTP is ${otp}`
+                html: generateVerificationEmailTemplate(otp, user_name)
             });
             console.log('Verification email sent successfully');
         } catch (emailError) {
@@ -149,7 +150,7 @@ export const shop_signup = async (req, res) => {
                 from: process.env.EMAIL_USER,
                 to: email,
                 subject: 'Email Verification',
-                text: `Your OTP is ${otp}`
+                html: generateVerificationEmailTemplate(otp, user_name)
             });
             console.log('Verification email sent successfully');
         } catch (emailError) {
@@ -190,6 +191,7 @@ export const resendOTP = async (req, res) => {
         }
 
         const userId = user[0].id;
+        const user_name = user[0].user_name;
         
         // First expire old OTPs
         await expireOldOTPs(userId);
@@ -218,8 +220,8 @@ export const resendOTP = async (req, res) => {
         await transporter.sendMail({
             from: process.env.EMAIL_USER,
             to: email,
-            subject: 'New OTP for Email Verification',
-            text: `Your new OTP is ${otp}. This OTP will expire in 5 minutes.`
+            subject: 'Email Verification',
+            html: generateVerificationEmailTemplate(otp, user_name)
         });
 
         res.status(200).json({
