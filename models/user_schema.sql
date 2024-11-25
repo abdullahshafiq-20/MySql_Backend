@@ -67,6 +67,10 @@ CREATE TABLE menu_items (
     FOREIGN KEY (shop_id) REFERENCES shops(id)
 );
 
+-- Add image_url column to menu_items table
+ALTER TABLE menu_items
+ADD COLUMN image_url VARCHAR(255) AFTER description;
+
 -- Orders table
 CREATE TABLE orders (
     order_id VARCHAR(36) PRIMARY KEY,
@@ -508,3 +512,6 @@ BEGIN
 END//
 
 DELIMITER ;
+
+
+

@@ -2,16 +2,16 @@ import pool from '../config/database.js';
 import { generateItemId } from '../utils/generateId.js';
 
 export const addMenuItem = async (req, res) => {
-  const { name, description, price } = req.body;
+  const { name, description, price, image_url } = req.body;
   const shop_id = req.params.shop_id;
   const item_id = generateItemId(name);
 
   try {
     const [result] = await pool.execute(
-      'INSERT INTO menu_items (item_id, shop_id, name, description,price) VALUES (?, ?, ?, ?, ?)',
-      [item_id, shop_id, name, description, price]
+      'INSERT INTO menu_items (item_id, shop_id, name, description, image_url, price) VALUES (?, ?, ?, ?, ?, ?)',
+      [item_id, shop_id, name, description, image_url, price]
     );
-    res.status(201).json({ item_id, shop_id, name, description, price });
+    res.status(201).json({ item_id, shop_id, name, description, image_url, price });
   } catch (error) {
     console.error('Add menu item error:', error);
     res.status(500).json({ error: 'Failed to add menu item', message: error.message });
@@ -19,18 +19,18 @@ export const addMenuItem = async (req, res) => {
 };
 
 export const updateMenuItem = async (req, res) => {
-  const { name, description, price } = req.body;
+  const { name, description, price, image_url } = req.body;
   const { shop_id, item_id } = req.params;
 
   try {
     const [result] = await pool.execute(
-      'UPDATE menu_items SET name = ?, description = ?,  price = ? WHERE shop_id = ? AND item_id = ?',
-      [name, description, price, shop_id, item_id]
+      'UPDATE menu_items SET name = ?, description = ?, image_url = ?, price = ? WHERE shop_id = ? AND item_id = ?',
+      [name, description, image_url, price, shop_id, item_id]
     );
     if (result.affectedRows === 0) {
       return res.status(404).json({ error: 'Menu item not found' });
     }
-    res.status(200).json({ item_id, shop_id, name, description,  price });
+    res.status(200).json({ item_id, shop_id, name, description, image_url, price });
   } catch (error) {
     console.error('Update menu item error:', error);
     res.status(500).json({ error: 'Failed to update menu item', message: error.message });
@@ -104,6 +104,7 @@ export const getOverAllMenuItems = async (req, res) => {
         mi.item_id,
         mi.name,
         mi.description,
+        mi.image_url,
         mi.price,
         s.name AS shop_name,
         s.id AS shop_id
@@ -128,12 +129,9 @@ export const getOverAllMenuItems = async (req, res) => {
   
   } catch (error) {
     console.error('Error retrieving menu items:', error);
-    
-    // Send a more generic error message to client for security
     res.status(500).json({
       success: false,
       message: 'An error occurred while retrieving menu items',
-      // Only send error details in development
       ...(process.env.NODE_ENV === 'development' && { error: error.message })
     });
   }
