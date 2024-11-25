@@ -43,7 +43,7 @@ const sendPasswordEmail = async (email, password) => {
         await transporter.sendMail({
             from: process.env.EMAIL_USER,
             to: email,
-            subject: 'Your Account Password',
+            subject: 'Your Account Password - Campick NUCES',
             html: generatePasswordEmailTemplate(password, email)
         });
         console.log('Password email sent successfully');

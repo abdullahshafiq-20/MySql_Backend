@@ -5,6 +5,8 @@ import dotenv from 'dotenv';
 import { GoogleGenerativeAI } from "@google/generative-ai";
 import { getApiKey } from '../utils/apiKeyRotation.js';
 import {io } from '../app.js';
+import nodemailer from 'nodemailer';
+import { generateOrderConfirmationEmail } from '../utils/emailTemplate.js';
 dotenv.config();
 
 
@@ -111,6 +113,12 @@ export const verifyPaymentAndCreateOrder = async (req, res) => {
 
         console.log('Verified order items:', verifyOrderItems);
 
+        // After verifying order items, get user's email
+        const [userEmail] = await connection.execute(
+            'SELECT email FROM users WHERE id = ?',
+            [user_id]
+        );
+
         // 4. Use Gemini API to analyze the payment screenshot
         let geminiResult;
         try {
@@ -164,6 +172,51 @@ export const verifyPaymentAndCreateOrder = async (req, res) => {
                 items: verifyOrderItems,
                 gemini_analysis: parsedGeminiResult
             });
+
+            // Set up email transporter
+            const transporter = nodemailer.createTransport({
+                host: 'smtp.gmail.com',
+                port: 587,
+                secure: false,
+                auth: {
+                    user: process.env.EMAIL_USER,
+                    pass: process.env.EMAIL_PASS
+                },
+                tls: {
+                    rejectUnauthorized: false
+                }
+            });
+
+            // Get shop name for the email
+            const [shopDetails] = await connection.execute(
+                'SELECT name FROM shops WHERE id = ?',
+                [shop_id]
+            );
+
+            // Prepare order details for email
+            const orderDetails = {
+                order_id,
+                total_price: amount,
+                items: verifyOrderItems,
+                shop_name: shopDetails[0].name,
+                payment_method,
+                payment_status: 'pending',
+                order_status: 'pending'
+            };
+
+            // Send confirmation email
+            try {
+                await transporter.sendMail({
+                    from: process.env.EMAIL_USER,
+                    to: userEmail[0].email,
+                    subject: 'Order Confirmation - Campick NUCES',
+                    html: generateOrderConfirmationEmail(orderDetails)
+                });
+                console.log('Order confirmation email sent successfully');
+            } catch (emailError) {
+                console.error('Error sending order confirmation email:', emailError);
+                // Don't throw error here, just log it - the order is still valid
+            }
 
             res.status(201).json({
                 status: 'success',
@@ -455,6 +508,60 @@ export const updatePaymentStatus = async (req, res) => {
                 JOIN shops s ON p.shop_id = s.id
                 WHERE p.payment_id = ?
             `, [paymentId]);
+
+            // After updating the status, get user email and order details
+            const [orderDetails] = await connection.execute(`
+                SELECT 
+                    o.order_id,
+                    o.total_price,
+                    o.user_id,
+                    s.name as shop_name,
+                    u.email as user_email,
+                    p.payment_method
+                FROM orders o
+                JOIN shops s ON o.shop_id = s.id
+                JOIN users u ON o.user_id = u.id
+                JOIN payments p ON o.order_id = p.order_id
+                WHERE p.payment_id = ?
+            `, [paymentId]);
+
+            const [orderItems] = await connection.execute(`
+                SELECT oi.*, mi.name as item_name
+                FROM order_items oi
+                JOIN menu_items mi ON oi.item_id = mi.item_id
+                WHERE oi.order_id = ?
+            `, [orderDetails[0].order_id]);
+
+            // Send status update email
+            const transporter = nodemailer.createTransport({
+                host: 'smtp.gmail.com',
+                port: 587,
+                secure: false,
+                auth: {
+                    user: process.env.EMAIL_USER,
+                    pass: process.env.EMAIL_PASS
+                },
+                tls: {
+                    rejectUnauthorized: false
+                }
+            });
+
+            const emailDetails = {
+                order_id: orderDetails[0].order_id,
+                total_price: orderDetails[0].total_price,
+                items: orderItems,
+                shop_name: orderDetails[0].shop_name,
+                payment_method: orderDetails[0].payment_method,
+                payment_status: status.toLowerCase(),
+                order_status: orderStatus
+            };
+
+            await transporter.sendMail({
+                from: process.env.EMAIL_USER,
+                to: orderDetails[0].user_email,
+                subject: `Order Status Update - Campick NUCES`,
+                html: generateOrderConfirmationEmail(emailDetails)
+            });
 
             res.status(200).json({
                 success: true,

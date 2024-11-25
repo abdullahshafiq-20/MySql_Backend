@@ -481,33 +481,21 @@ CREATE TABLE IF NOT EXISTS warnings (
 -- Create Trigger to monitor student alert counts
 DELIMITER //
 
+DROP TRIGGER IF EXISTS check_student_alerts;
+
+-- Create a new trigger that only monitors warnings
 CREATE TRIGGER check_student_alerts
-AFTER INSERT ON orders
+AFTER UPDATE ON users
 FOR EACH ROW
 BEGIN
-    DECLARE user_role VARCHAR(50);
-    DECLARE alert_count_val INT;
-    
-    -- Get user role and alert count
-    SELECT role, alert_count INTO user_role, alert_count_val
-    FROM users 
-    WHERE id = NEW.user_id;
-    
-    -- If user is a student and alert count >= 3
-    IF user_role = 'student' AND alert_count_val >= 3 THEN
+    -- Only create warning when alert count reaches threshold
+    IF NEW.role = 'student' AND NEW.alert_count >= 3 THEN
         INSERT INTO warnings (user_id, warning_type, warning_message)
         VALUES (
-            NEW.user_id,
+            NEW.id,
             'excessive_alerts',
-            CONCAT('Student has accumulated ', alert_count_val, ' alerts and may need administrative attention')
+            CONCAT('Student has accumulated ', NEW.alert_count, ' alerts and may need administrative attention')
         );
-    END IF;
-    
-    -- Increment alert_count for the student
-    IF user_role = 'student' THEN
-        UPDATE users 
-        SET alert_count = alert_count + 1
-        WHERE id = NEW.user_id;
     END IF;
 END//
 

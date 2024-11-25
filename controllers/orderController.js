@@ -2,6 +2,8 @@ import pool from '../config/database.js';
 import {io } from '../app.js';
 import  {generateOrderId}  from '../utils/generateId.js'; 
 import { checkShopOwnership, incrementAlertCount } from '../utils/orderUtils.js';
+import nodemailer from 'nodemailer';
+import { generateOrderConfirmationEmail } from '../utils/emailTemplate.js';
 
 export const createOrder = async (req, res) => {
     console.log('Full request body:', req.body); // Debug log
@@ -302,12 +304,72 @@ export const updateOrderStatus = async (req, res) => {
                 [status, orderId]
             );
 
-            // If the status is changed to "delivered", update the shop's total revenue
+            // If the status is changed to "delivered" or "pickedup", update revenue and send email
             if (status === 'delivered' || status === 'pickedup') {
+                // Update shop revenue
                 await connection.execute(
                     'UPDATE shops SET total_revenue = total_revenue + ? WHERE id = ?',
                     [order.total_price, order.shop_id]
                 );
+
+                // Get user email and shop details for the email
+                const [userDetails] = await connection.execute(
+                    'SELECT email FROM users WHERE id = ?',
+                    [order.user_id]
+                );
+
+                const [shopDetails] = await connection.execute(
+                    'SELECT name FROM shops WHERE id = ?',
+                    [order.shop_id]
+                );
+
+                // Get order items for email
+                const [orderItems] = await connection.execute(
+                    `SELECT oi.*, mi.name as item_name
+                     FROM order_items oi
+                     JOIN menu_items mi ON oi.item_id = mi.item_id
+                     WHERE oi.order_id = ?`,
+                    [orderId]
+                );
+
+                // Set up email transporter
+                const transporter = nodemailer.createTransport({
+                    host: 'smtp.gmail.com',
+                    port: 587,
+                    secure: false,
+                    auth: {
+                        user: process.env.EMAIL_USER,
+                        pass: process.env.EMAIL_PASS
+                    },
+                    tls: {
+                        rejectUnauthorized: false
+                    }
+                });
+
+                // Prepare order details for email
+                const emailDetails = {
+                    order_id: orderId,
+                    total_price: order.total_price,
+                    items: orderItems,
+                    shop_name: shopDetails[0].name,
+                    payment_method: order.payment_method || 'Not specified',
+                    payment_status: order.payment_status,
+                    order_status: status
+                };
+
+                // Send delivery confirmation email
+                try {
+                    await transporter.sendMail({
+                        from: process.env.EMAIL_USER,
+                        to: userDetails[0].email,
+                        subject: `Order ${status.charAt(0).toUpperCase() + status.slice(1)} - Campick NUCES`,
+                        html: generateOrderConfirmationEmail(emailDetails)
+                    });
+                    console.log('Order delivery email sent successfully');
+                } catch (emailError) {
+                    console.error('Error sending delivery confirmation email:', emailError);
+                    // Don't throw error here, just log it
+                }
             }
 
             // If the status is changed to "discarded", increment the user's alert count
