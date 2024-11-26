@@ -9,6 +9,7 @@ import { createOrder, getOrderDetails, listUserOrders, updateOrderStatus, listSh
 import { getShopPaymentDetails, verifyPaymentAndCreateOrder, getPaymentDetails, updatePaymentStatus  } from '../controllers/paymentController.js'
 import { imageUpload } from '../controllers/upload.js'
 import { googleCallback, verifyToken } from '../controllers/googleAuthController.js'
+import { nlQueryController } from '../controllers/nlQueryController.js'
 // import upload from '../utils/multer.js'
 const router = express.Router()
 
@@ -66,5 +67,8 @@ router.put('/updateOrderStatus/:orderId', authenticateToken, updateOrderStatus)
 router.get('/listShopOrders', authenticateToken, listShopOrders)
 
 router.post('/verifyPaymentAndCreateOrder', authenticateToken, verifyPaymentAndCreateOrder)
+
+router.get('/chatWithDb/:query', nlQueryController.processNaturalLanguageQuery);
+router.post('/chatWithDb', nlQueryController.processNaturalLanguageQuery);
 
 export default router
