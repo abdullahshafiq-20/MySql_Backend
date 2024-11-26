@@ -163,7 +163,7 @@ export const verifyPaymentAndCreateOrder = async (req, res) => {
 
             await connection.commit();
 
-            io.emit('orderUpdate', {
+            io.emit('orderCreate', {
                 order_id,
                 user_id,
                 shop_id,
