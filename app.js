@@ -35,7 +35,8 @@ app.use(cors({
     process.env.FRONTEND_URL,
     'http://localhost:3000',
     'http://localhost:5173',
-    'https://campick-nuces.netlify.app'
+    'https://campick-nuces.netlify.app',
+    'https://chat-with-campick-db.vercel.app'
   ].filter(Boolean),
   credentials: true // Important for cookies/sessions
 }));
