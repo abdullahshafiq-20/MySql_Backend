@@ -36,7 +36,8 @@ app.use(cors({
     'http://localhost:3000',
     'http://localhost:5173',
     'https://campick-nuces.netlify.app',
-    'https://chat-with-campick-db.vercel.app'
+    'https://chat-with-campick-db.vercel.app',
+    'https://translate.google.com/'
   ].filter(Boolean),
   credentials: true // Important for cookies/sessions
 }));
