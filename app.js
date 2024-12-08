@@ -22,7 +22,6 @@ const io = new Server(httpServer, {
       process.env.FRONTEND_URL,
       'http://localhost:3000',
       'http://localhost:5173',
-      'https://campick-nuces.netlify.app'
     ].filter(Boolean),
     methods: ["GET", "POST", "PUT", "DELETE"],
     credentials: true
@@ -36,9 +35,10 @@ app.use(cors({
     'http://localhost:3000',
     'http://localhost:5173',
     'http://localhost:5000',
-    'https://campick-nuces.netlify.app',
     'https://chat-with-campick-db.vercel.app',
-    'https://translate.google.com/'
+    'https://translate.google.com/',
+    'https://campick-v1-0.vercel.app'
+
   ].filter(Boolean),
   credentials: true // Important for cookies/sessions
 }));
