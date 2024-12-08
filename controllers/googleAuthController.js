@@ -105,7 +105,7 @@ export const googleAuth = async (accessToken, refreshToken, profile, done) => {
             await sendPasswordEmail(email, randomPassword);
 
             const token = jwt.sign(
-                { id: newUser.id, email: newUser.email, role: newUser.role }, 
+                { id: newUser.id, email: newUser.email, role: newUser.role, imageURL: newUser.imageURL }, 
                 process.env.JWT_SECRET, 
                 { expiresIn: '1d' }
             );

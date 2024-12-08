@@ -36,7 +36,8 @@ CREATE TABLE shops (
     total_revenue DECIMAL(10, 2) DEFAULT 0.00,
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
-    FOREIGN KEY (owner_id) REFERENCES users(id)
+    FOREIGN KEY (owner_id) REFERENCES users(id),
+    is_open BOOLEAN DEFAULT TRUE
 );
 
 -- New Shop Contacts table
@@ -70,6 +71,10 @@ CREATE TABLE menu_items (
 -- Add image_url column to menu_items table
 ALTER TABLE menu_items
 ADD COLUMN image_url VARCHAR(255) AFTER description;
+
+-- Add category column to menu_items table
+ALTER TABLE menu_items
+ADD COLUMN category VARCHAR(50) AFTER name;
 
 -- Orders table
 CREATE TABLE orders (

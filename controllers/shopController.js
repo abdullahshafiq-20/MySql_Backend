@@ -74,8 +74,8 @@ export const createShop = async (req, res) => {
 export const getShopDetails = async (req, res) => {
     try {
       const [shopRows] = await pool.execute(
-        'SELECT * FROM shops WHERE id = ? AND owner_id = ?',
-        [req.params.shopId, req.user.id]
+        'SELECT id, owner_id, name, description, image_url, is_open, created_at, updated_at FROM shops WHERE id = ?',
+        [req.params.shopId]
       );
       if (shopRows.length === 0) {
         return res.status(404).json({ error: 'Shop not found' });
@@ -209,7 +209,7 @@ export const getOwnerShops = async (req, res) => {
 export const getAllShops = async (req, res) => {
     try {
       const [rows] = await pool.execute(`
-        SELECT s.id, s.name, s.description, s.image_url, sc.email, sc.contact_number 
+        SELECT s.id, s.name, s.description, s.image_url, sc.email, sc.contact_number , s.is_open
         FROM shops s
         LEFT JOIN shop_contacts sc ON s.id = sc.shop_id AND sc.is_primary = TRUE
       `);
@@ -217,5 +217,59 @@ export const getAllShops = async (req, res) => {
     } catch (error) {
       res.status(500).json({ error: 'Failed to get shops', message: error.message });
     }
+};
+
+export const toggleShopStatus = async (req, res) => {
+  const { shopId } = req.params;
+  const { is_open } = req.body;
+  
+  try {
+    // First verify if the user owns this shop
+    const [shopCheck] = await pool.execute(
+      'SELECT owner_id FROM shops WHERE id = ?',
+      [shopId]
+    );
+
+    if (shopCheck.length === 0) {
+      return res.status(404).json({ 
+        success: false, 
+        message: 'Shop not found' 
+      });
+    }
+
+    if (shopCheck[0].owner_id !== req.user.id) {
+      return res.status(403).json({ 
+        success: false, 
+        message: 'You are not authorized to modify this shop' 
+      });
+    }
+
+    // Update shop status
+    const [result] = await pool.execute(
+      'UPDATE shops SET is_open = ? WHERE id = ?',
+      [is_open, shopId]
+    );
+
+    if (result.affectedRows === 0) {
+      return res.status(404).json({ 
+        success: false, 
+        message: 'Failed to update shop status' 
+      });
+    }
+
+    res.status(200).json({
+      success: true,
+      message: `Shop is now ${is_open ? 'open' : 'closed'}`,
+      is_open: is_open
+    });
+
+  } catch (error) {
+    console.error('Toggle shop status error:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Failed to toggle shop status',
+      error: error.message
+    });
+  }
 };
 

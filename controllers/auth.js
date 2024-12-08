@@ -325,7 +325,7 @@ export const signin = async (req, res) => {
   
       // Generate token
       const token = jwt.sign(
-        { email: user.email, id: user.id, role: user.role },
+        { email: user.email, id: user.id, role: user.role, imageURL: user.imageURL, user_name: user.user_name },
         process.env.JWT_SECRET,
         { expiresIn: '1d' } // Token expires in 1 hour
       );

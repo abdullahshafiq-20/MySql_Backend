@@ -162,16 +162,8 @@ export const verifyPaymentAndCreateOrder = async (req, res) => {
             // ... (rest of the function remains the same)
 
             await connection.commit();
+            
 
-            io.emit('orderCreate', {
-                order_id,
-                user_id,
-                shop_id,
-                amount,
-                payment_method,
-                items: verifyOrderItems,
-                gemini_analysis: parsedGeminiResult
-            });
 
             // Set up email transporter
             const transporter = nodemailer.createTransport({
@@ -217,6 +209,61 @@ export const verifyPaymentAndCreateOrder = async (req, res) => {
                 console.error('Error sending order confirmation email:', emailError);
                 // Don't throw error here, just log it - the order is still valid
             }
+
+            // After successful payment verification and before sending response
+            io.emit('paymentUpdate', {
+                type: 'verification',
+                orderId: order_id,
+                paymentId: payment_id,
+                status: 'verified',
+                shopId: shop_id,
+                userId: user_id,
+                amount: amount,
+                timestamp: new Date()
+            });
+
+            // Get order details for socket emission
+            const [orderForSocket] = await connection.execute(`
+                SELECT 
+                    o.*,
+                    u.user_name as customer_name,
+                    s.name as shop_name,
+                    p.payment_method,
+                    p.verification_status
+                FROM orders o
+                JOIN users u ON o.user_id = u.id
+                JOIN shops s ON o.shop_id = s.id
+                JOIN payments p ON o.order_id = p.order_id
+                WHERE o.order_id = ?
+            `, [order_id]);
+
+            const [orderItemsForSocket] = await connection.execute(`
+                SELECT 
+                    oi.*,
+                    mi.name as item_name,
+                    mi.image_url
+                FROM order_items oi
+                JOIN menu_items mi ON oi.item_id = mi.item_id
+                WHERE oi.order_id = ?
+            `, [order_id]);
+
+            // Emit socket event for new order
+            io.emit('newOrder', {
+                ...orderForSocket[0],
+                items: orderItemsForSocket,
+                type: 'new_order',
+                timestamp: new Date()
+            });
+
+            // Emit to shop-specific channel
+            io.emit(`shop_order_${shop_id}`, {
+                type: 'new_order',
+                order: {
+                    ...orderForSocket[0],
+                    items: orderItemsForSocket
+                },
+                timestamp: new Date()
+            });
 
             res.status(201).json({
                 status: 'success',
@@ -561,6 +608,29 @@ export const updatePaymentStatus = async (req, res) => {
                 to: orderDetails[0].user_email,
                 subject: `Order Status Update - Campick NUCES`,
                 html: generateOrderConfirmationEmail(emailDetails)
+            });
+
+            // Emit payment status update event
+            io.emit('paymentStatusUpdate', {
+                type: 'payment_update',
+                paymentId,
+                orderId: existingPayment[0].order_id,
+                shopId: existingPayment[0].shop_id,
+                status,
+                orderStatus,
+                timestamp: new Date()
+            });
+
+            // Emit to shop-specific channel
+            io.emit(`shop_payment_${existingPayment[0].shop_id}`, {
+                type: 'payment_update',
+                payment: {
+                    paymentId,
+                    orderId: existingPayment[0].order_id,
+                    status,
+                    orderStatus
+                },
+                timestamp: new Date()
             });
 
             res.status(200).json({

@@ -130,55 +130,56 @@ export const createOrder = async (req, res) => {
                 calculatedTotal: verifyOrderItems.reduce((sum, item) => sum + item.price, 0)
             });
 
+            // After successful order creation, emit socket event
+            const [shopOwner] = await connection.execute(
+                'SELECT owner_id FROM shops WHERE id = ?',
+                [shop_id]
+            );
+
+            const [orderDetails] = await connection.execute(`
+                SELECT 
+                    o.*,
+                    u.user_name as customer_name,
+                    s.name as shop_name
+                FROM orders o
+                JOIN users u ON o.user_id = u.id
+                JOIN shops s ON o.shop_id = s.id
+                WHERE o.order_id = ?
+            `, [order_id]);
+
+            if (shopOwner.length > 0) {
+                io.emit(`newOrder_${shop_id}`, {
+                    order_id,
+                    shop_id,
+                    customer_name: orderDetails[0].customer_name,
+                    total_price: orderDetails[0].total_price,
+                    status: 'pending',
+                    created_at: new Date(),
+                    items: orderItems // This is already calculated in your existing code
+                });
+            }
+
             await connection.commit();
-
-            const [orderDetails] = await connection.execute(
-                `SELECT o.*, u.user_name, u.email
-                 FROM orders o
-                 JOIN users u ON o.user_id = u.id
-                 WHERE o.order_id = ?`,
-                [order_id]
-              );
-        
-              const [orderItems] = await connection.execute(
-                `SELECT oi.*, mi.name as item_name, mi.price
-                 FROM order_items oi
-                 JOIN menu_items mi ON oi.item_id = mi.item_id
-                 WHERE oi.order_id = ?`,
-                [order_id]
-              );
-              
-              const fullOrderDetails = {
-                ...orderDetails[0],
-                items: orderItems
-              };
-
-              io.emit('newOrder', fullOrderDetails);
-
             res.status(201).json({
+                success: true,
                 message: 'Order created successfully',
                 order_id,
                 total_price,
-                items: itemDetails,
-                verifiedItems: verifyOrderItems
+                items: orderItems
             });
+
         } catch (error) {
-            console.error('Transaction error:', error);
             await connection.rollback();
             throw error;
         } finally {
             connection.release();
         }
     } catch (error) {
-        console.error('Order creation error:', {
-            error: error.message,
-            stack: error.stack,
-            requestBody: req.body
-        });
-        res.status(500).json({ 
-            error: 'Failed to create order', 
-            message: error.message,
-            details: 'Check server logs for more information'
+        console.error('Create order error:', error);
+        res.status(500).json({
+            success: false,
+            error: 'Failed to create order',
+            message: error.message
         });
     }
 };
@@ -260,11 +261,13 @@ export const updateOrderStatus = async (req, res) => {
         await connection.beginTransaction();
 
         try {
-            // Get the order and check if it exists
-            const [orderRows] = await connection.execute(
-                'SELECT * FROM orders WHERE order_id = ?',
-                [orderId]
-            );
+            // Get the order and check if it exists along with payment status
+            const [orderRows] = await connection.execute(`
+                SELECT o.*, p.verification_status as payment_verification_status
+                FROM orders o
+                LEFT JOIN payments p ON o.order_id = p.order_id
+                WHERE o.order_id = ?
+            `, [orderId]);
 
             if (orderRows.length === 0) {
                 await connection.rollback();
@@ -273,11 +276,31 @@ export const updateOrderStatus = async (req, res) => {
 
             const order = orderRows[0];
 
+            // Check if order is already delivered or picked up
+            if (order.status === 'delivered' || order.status === 'pickedup') {
+                await connection.rollback();
+                return res.status(400).json({
+                    error: 'Invalid status update',
+                    message: 'Cannot update status of a delivered or picked up order'
+                });
+            }
+
             // Check if the user is the owner of the shop
             const isOwner = await checkShopOwnership(ownerId, order.shop_id);
             if (!isOwner) {
                 await connection.rollback();
                 return res.status(403).json({ error: 'You are not authorized to update this order' });
+            }
+
+            // Check payment verification status for certain status updates
+            if (['delivered', 'pickedup'].includes(status)) {
+                if (order.payment_verification_status !== 'verified') {
+                    await connection.rollback();
+                    return res.status(400).json({
+                        error: 'Invalid status update',
+                        message: 'Cannot mark order as delivered or picked up until payment is verified'
+                    });
+                }
             }
 
             // If status is being set to 'rejected', delete the order items first
@@ -332,7 +355,7 @@ export const updateOrderStatus = async (req, res) => {
                     [orderId]
                 );
 
-                // Set up email transporter
+                // Send email notification
                 const transporter = nodemailer.createTransport({
                     host: 'smtp.gmail.com',
                     port: 587,
@@ -346,7 +369,6 @@ export const updateOrderStatus = async (req, res) => {
                     }
                 });
 
-                // Prepare order details for email
                 const emailDetails = {
                     order_id: orderId,
                     total_price: order.total_price,
@@ -357,19 +379,12 @@ export const updateOrderStatus = async (req, res) => {
                     order_status: status
                 };
 
-                // Send delivery confirmation email
-                try {
-                    await transporter.sendMail({
-                        from: process.env.EMAIL_USER,
-                        to: userDetails[0].email,
-                        subject: `Order ${status.charAt(0).toUpperCase() + status.slice(1)} - Campick NUCES`,
-                        html: generateOrderConfirmationEmail(emailDetails)
-                    });
-                    console.log('Order delivery email sent successfully');
-                } catch (emailError) {
-                    console.error('Error sending delivery confirmation email:', emailError);
-                    // Don't throw error here, just log it
-                }
+                await transporter.sendMail({
+                    from: process.env.EMAIL_USER,
+                    to: userDetails[0].email,
+                    subject: `Order ${status.charAt(0).toUpperCase() + status.slice(1)} - Campick NUCES`,
+                    html: generateOrderConfirmationEmail(emailDetails)
+                });
             }
 
             // If the status is changed to "discarded", increment the user's alert count
@@ -378,6 +393,25 @@ export const updateOrderStatus = async (req, res) => {
             }
 
             await connection.commit();
+
+            // Emit order status update event
+            io.emit('orderStatusUpdate', {
+                type: 'status_update',
+                orderId,
+                status,
+                shopId: order.shop_id,
+                timestamp: new Date()
+            });
+
+            // Emit to shop-specific channel
+            io.emit(`shop_order_${order.shop_id}`, {
+                type: 'status_update',
+                order: {
+                    orderId,
+                    status,
+                    updatedAt: new Date()
+                }
+            });
 
             const [updatedOrderRows] = await connection.execute(
                 `SELECT o.*, u.user_name, u.email
@@ -404,8 +438,6 @@ export const updateOrderStatus = async (req, res) => {
                 items: orderItems
             };
 
-            io.emit('orderUpdate', fullUpdatedOrder);
-
             res.status(200).json({
                 message: 'Order status updated successfully',
                 orderId,
@@ -413,6 +445,7 @@ export const updateOrderStatus = async (req, res) => {
                 fullUpdatedOrder,
                 itemsRemoved: status === 'rejected'
             });
+
         } catch (error) {
             await connection.rollback();
             throw error;
@@ -463,7 +496,7 @@ export const listShopOrders = async (req, res) => {
             // Get order items for each order
             const ordersWithItems = await Promise.all(orderRows.map(async (order) => {
                 const [itemRows] = await connection.execute(
-                    `SELECT oi.*, mi.name as item_name 
+                    `SELECT oi.*, mi.name as item_name , mi.image_url
                      FROM order_items oi
                      JOIN menu_items mi ON oi.item_id = mi.item_id
                      WHERE oi.order_id = ?`,
@@ -559,6 +592,58 @@ export const listShopOrders = async (req, res) => {
       res.status(500).json({ error: 'An error occurred while retrieving payment information' });
     }
   };
+
+export const getOrderPaymentId = async (req, res) => {
+  const { orderId } = req.params;
+  let connection;
+
+  try {
+    connection = await pool.getConnection();
+
+    // Get payment details for the order
+    const [paymentDetails] = await connection.execute(`
+      SELECT 
+        p.payment_id,
+        p.verification_status,
+        p.payment_method,
+        p.created_at as payment_date,
+        o.status as order_status,
+        o.payment_status
+      FROM payments p
+      JOIN orders o ON p.order_id = o.order_id
+      WHERE p.order_id = ?
+    `, [orderId]);
+
+    if (paymentDetails.length === 0) {
+      return res.status(404).json({
+        success: false,
+        message: 'No payment found for this order',
+        order_id: orderId
+      });
+    }
+
+    res.status(200).json({
+      success: true,
+      message: 'Payment details retrieved successfully',
+      data: {
+        order_id: orderId,
+        ...paymentDetails[0]
+      }
+    });
+
+  } catch (error) {
+    console.error('Get order payment ID error:', error);
+    res.status(500).json({
+      success: false,
+      error: 'Failed to retrieve payment details',
+      message: error.message
+    });
+  } finally {
+    if (connection) {
+      connection.release();
+    }
+  }
+};
 
 //   export const updateOrderStatus = async (req, res) => {
 //     const { status } = req.body;
