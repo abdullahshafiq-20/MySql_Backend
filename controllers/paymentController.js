@@ -7,6 +7,7 @@ import { getApiKey } from '../utils/apiKeyRotation.js';
 import {io } from '../app.js';
 import nodemailer from 'nodemailer';
 import { generateOrderConfirmationEmail } from '../utils/emailTemplate.js';
+import { incrementAlertCount } from '../utils/orderUtils.js';
 dotenv.config();
 
 
@@ -530,6 +531,7 @@ export const updatePaymentStatus = async (req, res) => {
             let orderStatus = 'pending';
             if (status.toLowerCase() === 'rejected') {
                 orderStatus = 'rejected';
+                await incrementAlertCount(existingPayment[0].user_id);
             } else if (status.toLowerCase() === 'verified') {
                 orderStatus = 'preparing';
             }
