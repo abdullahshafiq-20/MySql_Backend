@@ -531,7 +531,7 @@ export const updatePaymentStatus = async (req, res) => {
             let orderStatus = 'pending';
             if (status.toLowerCase() === 'rejected') {
                 orderStatus = 'rejected';
-                await incrementAlertCount(existingPayment[0].user_id);
+                // await incrementAlertCount(order.user_id);
             } else if (status.toLowerCase() === 'verified') {
                 orderStatus = 'preparing';
             }

@@ -388,7 +388,7 @@ export const updateOrderStatus = async (req, res) => {
             }
 
             // If the status is changed to "discarded", increment the user's alert count
-            if (status === 'rejected') {
+            if (status === 'discarded') {
                 await incrementAlertCount(order.user_id);
             }
 
